@@ -1,21 +1,74 @@
 #include <stdio.h>
 #include <string.h>
 #include <tuple>
-#include <driver/gpio.h>
-#include <driver/rmt.h>
+#include "freertos/FreeRTOS.h"
 #include <neopixels.h>
 #include <neopixels_drv.h>
 
+using namespace Neopixel;
+using namespace NeopixelDrv;
+
 namespace NeopixelDrv
 {
-static void IRAM_ATTR rmt_adapter(const void *src, rmt_item32_t *dest, size_t src_size,
+static rmt_item32_t ws2811_bits[2];
+static rmt_item32_t ws2812_bits[2];    
+
+static inline void IRAM_ATTR rmt_adapter(const void *src, rmt_item32_t *dest, size_t src_size,
+        size_t wanted_num, size_t *translated_size, size_t *item_num, const rmt_item32_t *bits)
+{
+    if (src == NULL || dest == NULL) {
+        *translated_size = 0;
+        *item_num = 0;
+        return;
+    }
+    size_t size = 0;
+    size_t num = 0;
+    uint8_t *psrc = (uint8_t *)src;
+    rmt_item32_t *pdest = dest;
+    while (size < src_size && num < wanted_num) 
+    {
+        for (int i = 0; i < 8; i++) 
+        {
+            // MSB first
+            if (*psrc & (1 << (7 - i))) {
+                pdest->val =  bits[1].val;
+            } else {
+                pdest->val =  bits[0].val;
+            }
+            num++;
+            pdest++;
+        }
+        size++;
+        psrc++;
+    }
+    *translated_size = size;
+    *item_num = num;
+}
+
+static void IRAM_ATTR rmt_adapter_ws2811(const void *src, rmt_item32_t *dest, size_t src_size,
         size_t wanted_num, size_t *translated_size, size_t *item_num)
 {
-    
+    rmt_adapter(src,dest,src_size,wanted_num,translated_size,item_num,ws2811_bits);
+}
+
+static void IRAM_ATTR rmt_adapter_ws2812(const void *src, rmt_item32_t *dest, size_t src_size,
+        size_t wanted_num, size_t *translated_size, size_t *item_num)
+{
+    rmt_adapter(src,dest,src_size,wanted_num,translated_size,item_num,ws2812_bits);
+}
+static const Timing& get_timing(SegmentType type)
+{
+    static const Timing ws2811 { 500, 2000, 1200, 1300, 500 };
+    static const Timing ws2812 { 350, 1000, 1000,  350, 280 };
+    switch(type) {
+        default:
+        case SegmentType::WS2811: return ws2811;
+        case SegmentType::WS2812: return ws2812;
+    }
 }
 struct RMT : public Driver
 {
-    RMT(gpio_num_t gpio_port, rmt_channel_t channel, int mem_block_num, const Timing& tm) :
+    RMT(gpio_num_t gpio_port, rmt_channel_t channel, int mem_block_num, SegmentType segType) :
         tx_channel( channel)
     {
         rmt_config_t config = RMT_DEFAULT_CONFIG_TX(gpio_port, tx_channel);
@@ -25,27 +78,49 @@ struct RMT : public Driver
 
         ESP_ERROR_CHECK(rmt_config(&config));
         ESP_ERROR_CHECK(rmt_driver_install(config.channel, 0, 0));
-        initTiming(tm);
-        rmt_translator_init(config.channel, rmt_adapter);
+        initTiming(segType);
     }
-    void initTiming(const Timing& tm)
+    void initTiming(SegmentType segType)
     {
         uint32_t counter_clk_hz = 0;
         ESP_ERROR_CHECK(rmt_get_counter_clock(tx_channel, &counter_clk_hz));
+        const Timing& tm = get_timing(segType);
         // ns -> ticks
         const float ratio = (float)counter_clk_hz / 1e9;
-        t0h_ticks   = (uint32_t)(ratio * tm.T0H_NS);
-        t0l_ticks   = (uint32_t)(ratio * tm.T0L_NS);
-        t1h_ticks   = (uint32_t)(ratio * tm.T1H_NS);
-        t1l_ticks   = (uint32_t)(ratio * tm.T1L_NS);
-        reset_ticks = (uint32_t)(ratio * tm.RESET_NS);
-    }
-    void write(int size, Neopixel::RGB* data) override
-    {
+        const auto t0h_ticks = (uint16_t)(ratio * tm.T0H_NS);
+        const auto t0l_ticks = (uint16_t)(ratio * tm.T0L_NS);
+        const auto t1h_ticks = (uint16_t)(ratio * tm.T1H_NS);
+        const auto t1l_ticks = (uint16_t)(ratio * tm.T1L_NS);
+        reset_ticks      = (uint16_t)(ratio * tm.RESET_NS);
 
+        rmt_item32_t *bits;
+        switch(segType){
+            default:
+            case SegmentType::WS2811:
+                bits = ws2811_bits;
+                rmt_translator_init(tx_channel, rmt_adapter_ws2811);
+                break;
+            case SegmentType::WS2812:
+                bits = ws2812_bits;
+                rmt_translator_init(tx_channel, rmt_adapter_ws2812);
+                break;
+        }
+        bits[0] = {{{ t0h_ticks, 1, t0l_ticks, 0 }}}; //Logical 0
+        bits[1] = {{{ t1h_ticks, 1, t1l_ticks, 0 }}}; //Logical 1
+    }
+    void write(int size, Neopixel::RGB* data, bool wait) override
+    {
+        ESP_ERROR_CHECK(rmt_write_sample(tx_channel, (uint8_t*)data, size * 3, wait));
+        //if (result != ESP_OK) {
+        //    ESP_LOGE("RMT","rmt_write_sample returned error %d", result);
+        //}
+    }
+    bool wait(uint32_t timeout_ms) override
+    {
+        return rmt_wait_tx_done(tx_channel, pdMS_TO_TICKS(timeout_ms)) == ESP_OK;
     }
     const rmt_channel_t tx_channel;
-    uint16_t t0h_ticks, t0l_ticks, t1h_ticks, t1l_ticks, reset_ticks;
+    uint16_t reset_ticks;
 };
 }
 
@@ -73,7 +148,7 @@ RGB HSV::toRGB() const
 struct SegmentInfo
 {
     int num_leds;
-    NeopixelDrv::Driver *driver;
+    Driver *driver;
 };
 
 struct LedStripImpl : public LedStrip
@@ -103,12 +178,20 @@ struct LedStripImpl : public LedStrip
         RGB *data = _back;
         _back = _front;
         _front = data;
-        for (int i=0;i<_nSegments;++i) 
+        for (int i=0;i<_nSegments;++i)
         {
             auto & s = _segments[i];
             s.driver->write(s.num_leds, data);
             data += s.num_leds;
         }
+    }
+    bool waitReady(uint32_t timeout_ms) override
+    {
+        bool done = true;
+        for (int i=0;i<_nSegments;++i) {
+            done &= _segments[i].driver->wait(timeout_ms);
+        }
+        return done;
     }
     void release() override
     {
@@ -152,25 +235,14 @@ static std::tuple<uint32_t,uint32_t> calc_alloc_size(const LedStripConfig& cfg)
     total_alloc_size += sizeof(LedStripImpl);
     return {total_alloc_size, total_led_count};
 }
-static const NeopixelDrv::Timing& get_timing(SegmentType type)
-{
-    static const NeopixelDrv::Timing ws2811 { 500, 2000, 1200, 1300, 500 };
-    static const NeopixelDrv::Timing ws2812 { 350, 1000, 1000,  350, 280 };
-    switch(type){
-        default:
-        case SegmentType::WS2811: return ws2811;
-        case SegmentType::WS2812: return ws2812;
-    }
-}
+
 static NeopixelDrv::Driver* create_driver(const LedSegmentConfig& cfg, uint8_t*& raw_mem)
 {
     switch(cfg.driver){
         case DriverType::RMT: 
         {
-            static rmt_channel_t channel[] = {RMT_CHANNEL_0,RMT_CHANNEL_1,RMT_CHANNEL_2,RMT_CHANNEL_3,RMT_CHANNEL_4,RMT_CHANNEL_5,RMT_CHANNEL_6,RMT_CHANNEL_7};
             const auto & rmt_cfg = *reinterpret_cast<RMTDriverConfig*>(cfg.driver_config);
-            auto * drv = new (raw_mem) NeopixelDrv::RMT((gpio_num_t)rmt_cfg.gpio, 
-                                        channel[rmt_cfg.channel], rmt_cfg.mem_block_num, get_timing(cfg.strip));
+            auto * drv = new (raw_mem) NeopixelDrv::RMT(rmt_cfg.gpio, rmt_cfg.channel, rmt_cfg.mem_block_num, cfg.strip);
             raw_mem += sizeof(NeopixelDrv::RMT);
             return drv;
         }

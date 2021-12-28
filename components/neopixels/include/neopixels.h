@@ -1,4 +1,7 @@
 #include <stdint.h>
+#include <driver/gpio.h>
+#include <driver/rmt.h>
+#include <esp_event.h>
 
 namespace Neopixel
 {
@@ -17,7 +20,9 @@ struct HSV
 
 struct RMTDriverConfig
 {
-    int gpio, channel, mem_block_num;
+    gpio_num_t gpio;
+    rmt_channel_t channel;
+    int mem_block_num;
 };
 
 enum class SegmentType { WS2811,WS2812 };
@@ -42,9 +47,17 @@ struct LedStrip
     virtual void setPixelRGB(int first, int num, const RGB*) = 0;
     virtual void setPixelHSV(int first, int num, const HSV*) = 0;
     virtual void refresh() = 0;
+    virtual bool waitReady(uint32_t timeout_ms) = 0;
     virtual void release() = 0;
 protected:
     virtual ~LedStrip(){}
 };
-extern "C" void app_main(void*);
+ESP_EVENT_DECLARE_BASE(NEOPIXEL_EVENTS);
+enum NeopixelAppEvents
+{
+    EvSetStatic,
+    EvStartAnimation
+};
+esp_event_loop_handle_t create_event_loop();
+extern "C" void neopixel_main(void*);
 }

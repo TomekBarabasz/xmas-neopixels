@@ -14,6 +14,7 @@
 #include "lwip/sockets.h"
 #include "lwip/sys.h"
 #include <lwip/netdb.h>
+#include <neopixels.h>
 
 #define PORT                        1234
 #define KEEPALIVE_IDLE              30
@@ -86,7 +87,7 @@ CLEAN_UP:
     vTaskDelete(NULL);
     return -1;
 }
-static void handle_incomming_data(int sock)
+static void handle_incomming_data(int sock, esp_event_loop_handle_t event_loop)
 {
 
 }
@@ -127,7 +128,7 @@ static int connect_socket(int listen_sock)
 
     return sock;
 }
-static void tcp_server_task_main()
+static void tcp_server_task_main(esp_event_loop_handle_t event_loop)
 {
     int listen_sock = initialize_socket();
 
@@ -135,7 +136,7 @@ static void tcp_server_task_main()
     {
         int sock = connect_socket(listen_sock);
         if (sock < 0) continue;
-        handle_incomming_data(sock);
+        handle_incomming_data(sock,event_loop);
         shutdown(sock, 0);
         close(sock);
     }
@@ -144,8 +145,9 @@ static void tcp_server_task_main()
     vTaskDelete(NULL);
 }
 
-void tcp_server_task(void* unused)
+extern "C" void tcp_server_task(void* params)
 {
     ESP_ERROR_CHECK(example_connect());
-    tcp_server_task_main();
+    auto loop_handle = reinterpret_cast<esp_event_loop_handle_t>(params); 
+    tcp_server_task_main(loop_handle);
 }
