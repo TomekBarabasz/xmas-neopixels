@@ -1,3 +1,3 @@
-idf_component_register(SRCS "main.c" "neopixels.cpp" "tcp_server.c"
+idf_component_register(SRCS "main.cpp" "tcp_server.c"
     INCLUDE_DIRS "."
 )
