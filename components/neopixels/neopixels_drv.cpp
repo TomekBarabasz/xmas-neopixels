@@ -2,8 +2,8 @@
 #include <string.h>
 #include <tuple>
 #include "freertos/FreeRTOS.h"
-#include <neopixels.h>
-#include <neopixels_drv.h>
+#include <neopixel.h>
+#include <neopixel_drv.h>
 
 using namespace Neopixel;
 using namespace NeopixelDrv;
@@ -56,6 +56,7 @@ static void IRAM_ATTR rmt_adapter_ws2812(const void *src, rmt_item32_t *dest, si
 {
     rmt_adapter(src,dest,src_size,wanted_num,translated_size,item_num,ws2812_bits);
 }
+
 static const Timing& get_timing(SegmentType type)
 {
     static const Timing ws2811 { 500, 2000, 1200, 1300, 500 };
@@ -91,7 +92,7 @@ struct RMT : public Driver
         const auto t0l_ticks = (uint16_t)(ratio * tm.T0L_NS);
         const auto t1h_ticks = (uint16_t)(ratio * tm.T1H_NS);
         const auto t1l_ticks = (uint16_t)(ratio * tm.T1L_NS);
-        reset_ticks      = (uint16_t)(ratio * tm.RESET_NS);
+        reset_ticks          = (uint16_t)(ratio * tm.RESET_NS);
 
         rmt_item32_t *bits;
         switch(segType){
@@ -151,29 +152,37 @@ struct SegmentInfo
     Driver *driver;
 };
 
+template <typename T>
+T min(T a, T b) { return a < b ? a : b; }
+
 struct LedStripImpl : public LedStrip
 {
     LedStripImpl(int totSize, int nSegments, SegmentInfo* segments, RGB* front, RGB* back, void* rawMem) : 
         _nSegments(nSegments), _totSize(totSize), _segments(segments), 
         _front(front), _back(back),
-        _newData(false),
         _rawMem(rawMem)
     {}
     int getLength() const override { return _totSize; } 
     RGB* getBuffer() override { return _back; }
-    void setPixelRGB(int first, int count, const RGB* rgb) override
+    void setPixelsRGB(int first, int count, const RGB* rgb) override
     {
+        count = min(count, _totSize - first);
         memcpy(_back + first, rgb, count * sizeof(RGB));
-        _newData = true;
     }
-    void setPixelHSV(int first, int count, const HSV* hsv) override
+    void fillPixelsRGB(int first, int count, const RGB& rgb) override
     {
+        count = min(count, _totSize - first);
+        auto * ptr = _back + first;
+        while(count--) *ptr++ = rgb;
+    }
+    void setPixelsHSV(int first, int count, const HSV* hsv) override
+    {
+        count = min(count, _totSize - first);
         for (int i=0; i<count; ++i) {
             _back[first + i] = hsv[i].toRGB();
         }
-        _newData = true;
     }
-    void refresh() override
+    void refresh(bool wait) override
     {
         RGB *data = _back;
         _back = _front;
@@ -184,6 +193,9 @@ struct LedStripImpl : public LedStrip
             s.driver->write(s.num_leds, data);
             data += s.num_leds;
         }
+        if (wait) {
+            waitReady(1000);
+        }
     }
     bool waitReady(uint32_t timeout_ms) override
     {
@@ -193,25 +205,20 @@ struct LedStripImpl : public LedStrip
         }
         return done;
     }
+    void copyFrontToBack() override
+    {
+        memcpy(_back, _front, sizeof(RGB)*_totSize);
+    }
     void release() override
     {
         free(_rawMem);
     }
 
-    RGB& operator[](int i) { return _back[i];}
-    const RGB& operator[](int i) const { return _back[i];}
-
     int _nSegments, _totSize;
     const SegmentInfo* _segments;
     RGB *_front, *_back;
-    bool _newData;
     void* _rawMem;
 };
-
-inline uint16_t operator "" _us(unsigned long long value)
-{
-    return static_cast<uint16_t>(value);
-}
 
 static uint32_t calc_led_driver_size(DriverType type)
 {
@@ -220,6 +227,7 @@ static uint32_t calc_led_driver_size(DriverType type)
         default: return 0;
     }
 }
+
 static std::tuple<uint32_t,uint32_t> calc_alloc_size(const LedStripConfig& cfg)
 {
     uint32_t total_alloc_size = 0;
@@ -231,7 +239,7 @@ static std::tuple<uint32_t,uint32_t> calc_alloc_size(const LedStripConfig& cfg)
         total_alloc_size += calc_led_driver_size(segment.driver);
         total_alloc_size += sizeof(SegmentInfo);
     }
-    total_alloc_size += 2 * sizeof(RGB)*total_led_count;
+    total_alloc_size += cfg.num_buffers * sizeof(RGB)*total_led_count;
     total_alloc_size += sizeof(LedStripImpl);
     return {total_alloc_size, total_led_count};
 }
@@ -250,6 +258,7 @@ static NeopixelDrv::Driver* create_driver(const LedSegmentConfig& cfg, uint8_t*&
             return nullptr;
     }
 }
+
 LedStrip* LedStrip::create(const LedStripConfig& cfg)
 {
     auto [total_size,total_led_count] = calc_alloc_size(cfg);
@@ -264,8 +273,13 @@ LedStrip* LedStrip::create(const LedStripConfig& cfg)
     }
     RGB* front = reinterpret_cast<RGB*>(next_ptr);
     next_ptr += sizeof(RGB) * total_led_count;
-    RGB* back = reinterpret_cast<RGB*>(next_ptr);
-    next_ptr += sizeof(RGB) * total_led_count;
+    RGB *back;
+    if (2==cfg.num_buffers){
+        back = reinterpret_cast<RGB*>(next_ptr);
+        next_ptr += sizeof(RGB) * total_led_count;
+    } else{
+        back = front;
+    }
     return  new (next_ptr) LedStripImpl(total_led_count, cfg.num_segments, segments, front, back, raw_mem);
 }
 }

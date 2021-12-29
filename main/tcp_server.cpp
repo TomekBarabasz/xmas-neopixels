@@ -14,7 +14,7 @@
 #include "lwip/sockets.h"
 #include "lwip/sys.h"
 #include <lwip/netdb.h>
-#include <neopixels.h>
+#include <neopixel_app.h>
 
 #define PORT                        1234
 #define KEEPALIVE_IDLE              30
@@ -87,9 +87,22 @@ CLEAN_UP:
     vTaskDelete(NULL);
     return -1;
 }
-static void handle_incomming_data(int sock, esp_event_loop_handle_t event_loop)
+static void handle_incomming_data(int sock, esp_event_loop_handle_t loop_handle)
 {
-
+    uint8_t rx_buffer[256];
+    int nbytes;
+    do
+    {
+        nbytes = recv(sock, rx_buffer, sizeof(rx_buffer), 0);
+        if (nbytes < 0) {
+            ESP_LOGE(TAG, "Error occurred during receiving: errno %d", errno);
+        } else if (nbytes == 0) {
+            ESP_LOGW(TAG, "Connection closed");
+        } else 
+        {
+            ESP_ERROR_CHECK(esp_event_post_to(loop_handle, NeopixelApp::NEOPIXEL_EVENTS, 0, rx_buffer, nbytes, portMAX_DELAY));
+        }
+    } while(nbytes > 0);
 }
 static int connect_socket(int listen_sock)
 {
@@ -144,7 +157,6 @@ static void tcp_server_task_main(esp_event_loop_handle_t event_loop)
     close(listen_sock);
     vTaskDelete(NULL);
 }
-
 extern "C" void tcp_server_task(void* params)
 {
     ESP_ERROR_CHECK(example_connect());

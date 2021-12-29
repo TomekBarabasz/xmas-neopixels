@@ -37,6 +37,7 @@ struct LedSegmentConfig
 struct LedStripConfig
 {
     int num_segments;
+    int num_buffers;
     LedSegmentConfig segments[];
 };
 struct LedStrip
@@ -44,20 +45,14 @@ struct LedStrip
     static LedStrip* create(const LedStripConfig&);
     virtual int getLength() const = 0;
     virtual RGB* getBuffer() = 0;
-    virtual void setPixelRGB(int first, int num, const RGB*) = 0;
-    virtual void setPixelHSV(int first, int num, const HSV*) = 0;
-    virtual void refresh() = 0;
+    virtual void setPixelsRGB(int first, int num, const RGB*) = 0;
+    virtual void fillPixelsRGB(int first, int num, const RGB&) = 0;
+    virtual void setPixelsHSV(int first, int num, const HSV*) = 0;
+    virtual void refresh(bool wait=false) = 0;
+    virtual void copyFrontToBack() = 0;
     virtual bool waitReady(uint32_t timeout_ms) = 0;
     virtual void release() = 0;
 protected:
     virtual ~LedStrip(){}
 };
-ESP_EVENT_DECLARE_BASE(NEOPIXEL_EVENTS);
-enum NeopixelAppEvents
-{
-    EvSetStatic,
-    EvStartAnimation
-};
-esp_event_loop_handle_t create_event_loop();
-extern "C" void neopixel_main(void*);
 }
