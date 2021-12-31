@@ -2,6 +2,7 @@
 #include <string.h>
 #include <tuple>
 #include "freertos/FreeRTOS.h"
+#include <esp_log.h>
 #include <neopixel.h>
 #include <neopixel_drv.h>
 
@@ -78,8 +79,11 @@ struct RMT : public Driver
         config.mem_block_num = mem_block_num;
 
         ESP_ERROR_CHECK(rmt_config(&config));
+        ESP_LOGI("drv","rmt_config done");
         ESP_ERROR_CHECK(rmt_driver_install(config.channel, 0, 0));
+        ESP_LOGI("drv","rmt_driver_install done");
         initTiming(segType);
+        ESP_LOGI("drv","initTiming done");
     }
     void initTiming(SegmentType segType)
     {
@@ -112,13 +116,14 @@ struct RMT : public Driver
     void write(int size, Neopixel::RGB* data, bool wait) override
     {
         ESP_ERROR_CHECK(rmt_write_sample(tx_channel, (uint8_t*)data, size * 3, wait));
-        //if (result != ESP_OK) {
-        //    ESP_LOGE("RMT","rmt_write_sample returned error %d", result);
-        //}
     }
     bool wait(uint32_t timeout_ms) override
     {
         return rmt_wait_tx_done(tx_channel, pdMS_TO_TICKS(timeout_ms)) == ESP_OK;
+    }
+    void unload() override
+    {
+        ESP_ERROR_CHECK(rmt_driver_uninstall(tx_channel));
     }
     const rmt_channel_t tx_channel;
     uint16_t reset_ticks;
@@ -211,6 +216,11 @@ struct LedStripImpl : public LedStrip
     }
     void release() override
     {
+        for (int i=0;i<_nSegments;++i) {
+            _segments[i].driver->unload();
+            //TODO: remove when in-place driver new will be fixed
+            delete reinterpret_cast<NeopixelDrv::RMT*>(_segments[i].driver);
+        }
         free(_rawMem);
     }
 
@@ -239,14 +249,15 @@ static std::tuple<uint32_t,uint32_t> calc_alloc_size(const LedStripConfig& cfg)
         total_alloc_size += calc_led_driver_size(segment.driver);
         total_alloc_size += sizeof(SegmentInfo);
     }
-    total_alloc_size += cfg.num_buffers * sizeof(RGB)*total_led_count;
+    total_alloc_size += cfg.num_buffers * sizeof(RGB) * total_led_count;
     total_alloc_size += sizeof(LedStripImpl);
     return {total_alloc_size, total_led_count};
 }
 
 static NeopixelDrv::Driver* create_driver(const LedSegmentConfig& cfg, uint8_t*& raw_mem)
 {
-    switch(cfg.driver){
+    switch(cfg.driver) 
+    {
         case DriverType::RMT: 
         {
             const auto & rmt_cfg = *reinterpret_cast<RMTDriverConfig*>(cfg.driver_config);
@@ -263,6 +274,7 @@ LedStrip* LedStrip::create(const LedStripConfig& cfg)
 {
     auto [total_size,total_led_count] = calc_alloc_size(cfg);
     void* raw_mem = malloc(total_size);
+    memset(raw_mem, 0xcd, total_size);
     auto *next_ptr = reinterpret_cast<uint8_t*>(raw_mem);
     auto *segments = reinterpret_cast<SegmentInfo*>(next_ptr);
     next_ptr += sizeof(SegmentInfo)*cfg.num_segments;

@@ -13,6 +13,17 @@ struct RGB
 
 struct HSV
 {
+    enum class Hue {
+        RED = 0,
+        ORANGE = 32,
+        YELLOW = 64,
+        GREEN = 96,
+        AQUA = 128,
+        BLUE = 160,
+        PURPLE = 192,
+        PINK = 224
+    };
+
     uint16_t h;
     uint8_t s,v;
     RGB toRGB() const;
@@ -36,9 +47,10 @@ struct LedSegmentConfig
 };
 struct LedStripConfig
 {
-    int num_segments;
     int num_buffers;
-    LedSegmentConfig segments[];
+    int num_segments;
+    //LedSegmentConfig segments[];
+    LedSegmentConfig *segments;
 };
 struct LedStrip
 {

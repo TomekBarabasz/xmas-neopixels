@@ -16,6 +16,7 @@ struct Driver
 {
     virtual void write(int size, Neopixel::RGB* data, bool wait=false) = 0;
     virtual bool wait(uint32_t timeout_ms) = 0;
+    virtual void unload() = 0;
 protected:
     virtual ~Driver(){}
 };
