@@ -13,7 +13,17 @@ namespace NeopixelApp
 ESP_EVENT_DEFINE_BASE(NEOPIXEL_EVENTS);
 TaskHandle_t animationTask = NULL;
 LedStrip *strip = nullptr;
-using AnimationFcn = void (*)(void*);
+struct Animation
+{
+    static void main(void*param)
+    {
+        auto anim = reinterpret_cast<Animation*>(param);
+        anim->run();
+    }
+    virtual void run() = 0;
+    virtual ~Animation(){}
+};
+Animation *currentAnimation = nullptr;
 static const char* TAG = "npx-app";
 
 template <typename T>
@@ -33,69 +43,88 @@ T decode(void*& data)
     return v;
 }
 
-static void default_animation(void *params)
+static void fade_all(RGB *leds, int size, uint8_t scale)
 {
-    void *p = params;
-    LedStrip* strip = decode<LedStrip*>(params);
-    const uint16_t delay_ms = decode<uint16_t>(params);
-    delete[] reinterpret_cast<uint8_t*>(p);
-    const auto size = strip->getLength();
-
-    uint16_t start_rgb = 0;
-    HSV hsv {0,100,100};
-
-    while (true) 
-    {
-        for (int i = 0; i < 3; i++) 
-        {
-            for (int j = i; j < size; j += 3) 
-            {
-                // Build RGB values
-                hsv.h = j * 360 / size + start_rgb;
-                strip->setPixelsHSV(j, 1, &hsv);
-            }
-            strip->refresh(true);
-            vTaskDelay(pdMS_TO_TICKS(delay_ms));
-        }
-        start_rgb += 60;
+    for (int i=0;i<size;++i) {
+        leds[i].scale8(scale);
     }
 }
 
-static void colortest_animation(void *params)
+struct Colortest : public Animation
 {
-    void *p=params;
-    auto * strip = decode<LedStrip*>(params);
-    const uint16_t delay_ms = decode<uint16_t>(params);
-    ESP_LOGI(TAG, "colortest_animation : delay %d strip %p", delay_ms, strip);
-    delete[] reinterpret_cast<uint8_t*>(p);
-    const auto size = strip->getLength();
-    
-    RGB black = {0,0,0};
-    RGB rgb[] = { {255,0,0}, {0, 255,0}, {0,0,255} };
-    strip->fillPixelsRGB(0,size,{0,0,0});
-    for(;;)
+    LedStrip *strip;
+    uint16_t delay_ms;
+    Colortest(LedStrip *strip_, int datasize, void *data) : strip(strip_)
     {
-        for (int i=0;i<size;++i)
+        delay_ms = decode<uint16_t>(data);
+        ESP_LOGI(TAG, "colortest animation : delay %d", delay_ms);
+    }
+    void run() override
+    {
+        RGB black = {0,0,0};
+        RGB rgb[] = { {255,0,0}, {0, 255,0}, {0,0,255} };
+        const auto size = strip->getLength();
+
+        strip->fillPixelsRGB(0,size,{0,0,0});
+        for(;;)
         {
-            for (int j=0;j<3;++j)
+            for (int i=0;i<size;++i)
             {
-                strip->setPixelsRGB(i,1,rgb+j);
-                strip->refresh(true);
+                for (int j=0;j<3;++j)
+                {
+                    strip->setPixelsRGB(i,1,rgb+j);
+                    strip->refresh(true);
+                    vTaskDelay(pdMS_TO_TICKS(delay_ms));
+                }
+                strip->setPixelsRGB(i,1,&black);
+            }
+        }
+    }
+};
+
+struct Cylon : Animation
+{
+    LedStrip* strip;
+    uint16_t delay_ms;
+    uint8_t inc;
+    uint8_t fade;
+    Cylon(LedStrip *strip_, int datasize, void *data) : strip(strip_)
+    {
+        delay_ms = decode<uint16_t>(data);
+        inc = decode<uint8_t>(data);
+        fade = decode<uint8_t>(data);
+        ESP_LOGI(TAG, "Cylon animation : delay %d inc %d face %d", delay_ms, inc, fade);
+    }
+    void run() override
+    {
+        const auto size = strip->getLength();
+        HSV hsv {0,255,255};
+        int count = size;
+        int i = 0;
+        int dir = +1;
+        for(;;)
+        {
+            while(count-->0)
+            {
+                hsv.h += inc;
+                strip->fillPixelsRGB(i,1,hsv.toRGB());
+                strip->refresh();
+                fade_all(strip->getBuffer(), size, fade);
+                i += dir;
                 vTaskDelay(pdMS_TO_TICKS(delay_ms));
             }
-            strip->setPixelsRGB(i,1,&black);
+            if (dir>0) {
+                dir = -1;
+                --i;
+            } else {
+                dir = +1;
+                ++i;
+            }
+            count = size;
         }
     }
-}
-static AnimationFcn get_animation_by_number(uint32_t animation_id)
-{
-    switch(animation_id)
-    {
-        default:
-        case 0: return default_animation;
-        case 1: return colortest_animation;
-    }
-}
+};
+
 esp_event_loop_handle_t create_event_loop()
 {
     esp_event_loop_args_t loop_args = {
@@ -131,23 +160,33 @@ static void execute_CmdSet(LedStrip *strip, void *data)
         strip->refresh( refresh==2 );
     }
 }
+static Animation* create_animation(LedStrip*strip,int animation_id, void* data)
+{
+    const uint16_t animation_data_size = decode<uint16_t>(data);
+    switch(animation_id)
+    {
+        default:
+        case 0: return new Colortest(strip, animation_data_size, data);
+        case 1: return new Cylon(strip, animation_data_size, data);
+    }
+}
 static void execute_CmdStartAnimation(LedStrip *strip,void *data)
 {
     const uint16_t animation_id = decode<uint16_t>(data);
-    const uint16_t animation_data_size = decode<uint16_t>(data);
-    auto animation = get_animation_by_number(animation_id);
+
     if (animationTask != NULL) {
         vTaskDelete(animationTask);
         animationTask = NULL;
     }
-    if (animation) 
+    if (currentAnimation) {
+        delete currentAnimation;
+        currentAnimation = nullptr;
+    }
+    currentAnimation = create_animation(strip, animation_id, data);
+    strip->fillPixelsRGB(0,strip->getLength(),{0,0,0});
+    if (currentAnimation)
     {
-        uint8_t *task_data = new uint8_t[sizeof(LedStrip*)+animation_data_size];
-        void *p = task_data;
-        encode<LedStrip*>(p,strip);
-        memcpy(p,data,animation_data_size);
-        ESP_LOGI(TAG, "execute_CmdStartAnimation : starting animation %d data size %d strip %p", animation_id, animation_data_size, strip);
-        xTaskCreatePinnedToCore(animation, "neopixel_animation", 2048, task_data, 5, &animationTask, 1);
+        xTaskCreatePinnedToCore(Animation::main, "neopixel_animation", 2048, currentAnimation, 5, &animationTask, 1);
     }
 }
 static LedStrip* execute_CmdReconfigure(LedStrip *strip,void *data)
@@ -174,12 +213,14 @@ static LedStrip* execute_CmdReconfigure(LedStrip *strip,void *data)
 }
 static void start_default_animation(esp_event_loop_handle_t loop_handle)
 {
-    uint8_t default_animation_params[7];
+    uint8_t default_animation_params[9];
     void *p = default_animation_params;
     encode<uint8_t>(p, NeopixelApp::CmdStartAnimation);
     encode<uint16_t>(p, 1);
-    encode<uint16_t>(p, 2);
-    encode<uint16_t>(p, 150);
+    encode<uint16_t>(p, 4);
+    encode<uint16_t>(p, 10);
+    encode<uint8_t>(p,  1);
+    encode<uint8_t>(p,  250);
     ESP_LOGI(TAG, "neopixel_main : starting default animation, params ptr %p", default_animation_params);
     ESP_ERROR_CHECK(esp_event_post_to(loop_handle, NEOPIXEL_EVENTS, 0, default_animation_params, sizeof(default_animation_params), portMAX_DELAY));
 }
@@ -220,7 +261,7 @@ extern "C" void neopixel_main(void* params)
     LedStripConfig cfg = {1,2,segments};
 #else
     RMTDriverConfig rmt = {GPIO_NUM_16, RMT_CHANNEL_0, 8};
-    LedSegmentConfig segment {300, SegmentType::WS2811, DriverType::RMT, &rmt};
+    LedSegmentConfig segment {150, SegmentType::WS2811, DriverType::RMT, &rmt};
     LedStripConfig cfg = {1,1,&segment};
 #endif
     strip = LedStrip::create(cfg);
