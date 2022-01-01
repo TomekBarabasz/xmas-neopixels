@@ -1,4 +1,6 @@
 import socket,argparse,re,struct
+from time import sleep
+
 rxSet = re.compile( r'\s*(\d+)-(\d+) (\d+)\:(\d+)\:(\d+)\s*(\w)?\s*' )
 
 #set 0-99 255:255:0, 100,199 0:255:0 r
@@ -41,6 +43,30 @@ def set_keepalive(sock):
         sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPINTVL, 60)
         sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPCNT,   2)    
 
+def makeSetCommand(setprm,refresh):
+    tosend = struct.pack("<BBB",0,len(setprm),refresh)
+    for s in setprm:
+         tosend += struct.pack("<BBBHH", *(s))
+    return tosend
+
+def pingpong(sock, nloop):
+    numLeds=150
+    for _ in range(nloop):
+        for i in range(1,numLeds):
+            setprm = [(255,0,0,i,1),(0,0,0,i-1,1)]
+            sent = sock.send( makeSetCommand(setprm, 2) )
+            if sent==0:
+                print('send failed, exiting')
+                return
+            sleep(0.1)
+        for i in range(numLeds-2,-1,-1):
+            setprm = [(255,0,0,i,1),(0,0,0,i+1,1)]
+            sent = sock.send( makeSetCommand(setprm, 2) )
+            if sent==0:
+                print('send failed, exiting')
+                return
+            sleep(0.1)
+
 def main(Args):
     host,port = Args.addr.split(':')
     port = int(port)
@@ -63,6 +89,10 @@ def main(Args):
             tosend = parse_start_command(cmd[5:])
         elif cmd.startswith('configure'):
             tosend = parse_start_command(cmd[9:])
+        elif cmd.startswith('pingpong'):
+            nloop = int(cmd.split(' ')[1])
+            pingpong(sock,nloop)
+            continue
         if tosend is not None:
             send = sock.send(tosend)
             if send == 0:

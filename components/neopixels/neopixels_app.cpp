@@ -7,6 +7,7 @@
 #include <neopixel_app.h>
 
 using namespace Neopixel;
+uint32_t esp_random(void);
 
 namespace NeopixelApp 
 {
@@ -93,7 +94,7 @@ struct Cylon : Animation
         delay_ms = decode<uint16_t>(data);
         inc = decode<uint8_t>(data);
         fade = decode<uint8_t>(data);
-        ESP_LOGI(TAG, "Cylon animation : delay %d inc %d face %d", delay_ms, inc, fade);
+        ESP_LOGI(TAG, "Cylon animation : delay %d inc %d fade %d", delay_ms, inc, fade);
     }
     void run() override
     {
@@ -121,6 +122,134 @@ struct Cylon : Animation
                 ++i;
             }
             count = size;
+        }
+    }
+};
+
+struct Reel100 : Animation
+{
+    LedStrip *strip;
+    uint16_t hue_update_delay_ms;
+    uint16_t anim_update_delay_s;
+    uint8_t hue_inc;
+    uint8_t glitter_chance;
+    uint8_t fade = 245;
+
+    uint16_t hue;
+    uint16_t size;
+    using animFcn = void (Reel100::*)();
+    animFcn anims[2] = { &Reel100::rainbow, &Reel100::rainbowWithGlitter };
+    Reel100(LedStrip *strip_, int data_size, void *data) : strip(strip_)
+    {
+        hue_update_delay_ms = decode<uint16_t>(data);
+        anim_update_delay_s= decode<uint16_t>(data);
+        hue_inc = decode<uint8_t>(data);
+        glitter_chance = decode<uint8_t>(data);
+        size = strip->getLength();
+        ESP_LOGI(TAG, "Reel100 animation : hue_update_delay_ms %d anim_update_delay_s %d hue_inc %d glitter_chance %d", hue_update_delay_ms, anim_update_delay_s, hue_inc, glitter_chance);
+    }
+    void run() override
+    {
+        int anim_idx = 0;
+        int32_t anim_time = anim_update_delay_s * 1000;
+        for(;;)
+        {
+            (this->*anims[anim_idx])();
+            strip->refresh();
+            vTaskDelay(pdMS_TO_TICKS(hue_update_delay_ms));
+            anim_time -= hue_update_delay_ms;
+            if (anim_time <= 0) { 
+                anim_time = anim_update_delay_s * 1000;
+                anim_idx = (anim_idx+1) % (sizeof(anims)/sizeof(anims[0]));
+            }
+        }
+    }
+    void rainbow()
+    {   
+        HSV hsv = {hue,255,240};
+        for (int i=0;i<size;++i) {
+            strip->fillPixelsRGB(i,1,hsv.toRGB());
+            hsv.h += hue_inc;
+        }
+        hue = hsv.h;
+    }
+    void addGlitter(uint8_t chance)
+    {
+        const uint32_t rnd = esp_random();
+        if ((rnd & 0xFF) < chance) {
+            strip->fillPixelsRGB((rnd>>8) % size, 1, {255,255,255});
+        }
+    }
+    void rainbowWithGlitter() 
+    {
+        rainbow();
+        addGlitter(glitter_chance);
+    }
+    void confetti() 
+    {
+        // random colored speckles that blink in and fade smoothly
+        fade_all(strip->getBuffer(), size, fade);
+        const uint32_t rnd = esp_random();
+        HSV hsv = {uint16_t(hue + (rnd & 64)), 200, 255};
+        strip->getBuffer()[(rnd >> 8) % size] +=  hsv.toRGB();
+    }
+#if 0
+    void sinelon()
+    {
+        // a colored dot sweeping back and forth, with fading trails
+        fade_all(strip->getBuffer(), size, fade);
+
+        int pos = beatsin16( 13, 0, NUM_LEDS-1 );
+        leds[pos] += CHSV( gHue, 255, 192);
+    }
+
+    void bpm()
+    {
+        // colored stripes pulsing at a defined Beats-Per-Minute (BPM)
+        uint8_t BeatsPerMinute = 62;
+        CRGBPalette16 palette = PartyColors_p;
+        uint8_t beat = beatsin8( BeatsPerMinute, 64, 255);
+        for( int i = 0; i < NUM_LEDS; i++) { //9948
+            leds[i] = ColorFromPalette(palette, gHue+(i*2), beat-gHue+(i*10));
+        }
+    }
+
+    void juggle() 
+    {
+        // eight colored dots, weaving in and out of sync with each other
+        fadeToBlackBy( leds, NUM_LEDS, 20);
+        byte dothue = 0;
+        for( int i = 0; i < 8; i++) {
+            leds[beatsin16( i+7, 0, NUM_LEDS-1 )] |= CHSV(dothue, 200, 255);
+            dothue += 32;
+        }
+    }
+#endif
+};
+
+struct Random : Animation
+{
+    LedStrip* strip;
+    uint16_t delay_ms;
+    uint8_t fade;
+
+    Random(LedStrip *strip_, int datasize, void *data) : strip(strip_)
+    {
+        delay_ms = decode<uint16_t>(data);
+        fade = decode<uint8_t>(data);
+        ESP_LOGI(TAG, "Random animation : delay %d fade %d", delay_ms, fade);
+    }
+    void run() override
+    {
+        const auto size = strip->getLength();
+        for(;;)
+        {
+            uint32_t rnd = esp_random();
+            HSV hsv = {uint16_t(rnd % 360), 255, 255};
+            strip->fillPixelsRGB((rnd>>8)%size, 1, hsv.toRGB());
+            strip->refresh();
+            fade_all(strip->getBuffer(), size, fade);
+            vTaskDelay(pdMS_TO_TICKS(delay_ms));
         }
     }
 };
@@ -168,6 +297,8 @@ static Animation* create_animation(LedStrip*strip,int animation_id, void* data)
         default:
         case 0: return new Colortest(strip, animation_data_size, data);
         case 1: return new Cylon(strip, animation_data_size, data);
+        case 2: return new Reel100(strip, animation_data_size, data);
+        case 3: return new Random(strip, animation_data_size, data);
     }
 }
 static void execute_CmdStartAnimation(LedStrip *strip,void *data)
