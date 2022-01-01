@@ -16,6 +16,20 @@ struct RGB
         g = (((uint16_t)g) * scale_fixed) >> 8;
         b = (((uint16_t)b) * scale_fixed) >> 8;
     }
+    const RGB& operator+=(const RGB& other)
+    {
+        r += other.r;
+        g += other.g;
+        b += other.b;
+        return *this;
+    }
+    const RGB& operator+(const RGB& other)
+    {
+        r += other.r;
+        g += other.g;
+        b += other.b;
+        return *this;
+    }
 };
 
 struct HSV

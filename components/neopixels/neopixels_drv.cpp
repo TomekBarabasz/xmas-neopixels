@@ -131,23 +131,25 @@ struct RMT : public Driver
 }
 
 namespace Neopixel
-{  
-#define MAKE_RGB(R,G,B) { uint8_t((R)/100), uint8_t((G)/100), uint8_t((B)/100) }
+{
 RGB HSV::toRGB() const
 {
-    const uint16_t rgb_max = v * uint16_t(256) - v;
-    const uint16_t rgb_min = rgb_max * ( uint16_t(100) - s);
-    const uint8_t i = uint8_t(h / 60);
-    const uint8_t diff = uint8_t(h % 60);
-    // RGB adjustment amount by hue
-    const uint16_t rgb_adj = (rgb_max - rgb_min) * diff / 60;
-    switch (i) {
-    case 0: return MAKE_RGB( rgb_max,           rgb_min + rgb_adj, rgb_min );
-    case 1: return MAKE_RGB( rgb_max - rgb_adj, rgb_max,           rgb_min );
-    case 2: return MAKE_RGB( rgb_min,           rgb_max,           rgb_min + rgb_adj );
-    case 3: return MAKE_RGB( rgb_min,           rgb_max - rgb_adj, rgb_max );
-    case 4: return MAKE_RGB( rgb_min + rgb_adj, rgb_min,           rgb_max );
-    default:return MAKE_RGB( rgb_max,           rgb_min,           rgb_max - rgb_adj );
+    const uint16_t h_ = h % 360;
+    const uint16_t region = h_ / 60;
+    const uint16_t remainder = (h_ - (region * 60)) * (256/60);
+
+    const uint8_t p = (v * (255 - s)) >> 8;
+    const uint8_t q = (v * (255 - ((s * remainder) >> 8))) >> 8;
+    const uint8_t t = (v * (255 - ((s * (255 - remainder)) >> 8))) >> 8;
+
+    switch (region)
+    {
+        case 0: return {v,t,p};
+        case 1: return {q,v,p};
+        case 2: return {p,v,t};
+        case 3: return {p,q,v};
+        case 4: return {t,p,v};
+        default:return {v,p,q};
     }
 }
 
