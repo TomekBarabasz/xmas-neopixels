@@ -49,8 +49,11 @@ def makeSetCommand(setprm,refresh):
          tosend += struct.pack("<BBBHH", *(s))
     return tosend
 
-def pingpong(sock, nloop):
-    numLeds=150
+def pingpong(sock, cmd):
+    s = cmd.split(' ')
+    numLeds=int(s[1])
+    nloop = int(s[2])
+    delay = float(s[3])
     for _ in range(nloop):
         for i in range(1,numLeds):
             setprm = [(255,0,0,i,1),(0,0,0,i-1,1)]
@@ -58,14 +61,14 @@ def pingpong(sock, nloop):
             if sent==0:
                 print('send failed, exiting')
                 return
-            sleep(0.1)
+            sleep(delay)
         for i in range(numLeds-2,-1,-1):
             setprm = [(255,0,0,i,1),(0,0,0,i+1,1)]
             sent = sock.send( makeSetCommand(setprm, 2) )
             if sent==0:
                 print('send failed, exiting')
                 return
-            sleep(0.1)
+            sleep(delay)
 
 def main(Args):
     host,port = Args.addr.split(':')
@@ -90,8 +93,7 @@ def main(Args):
         elif cmd.startswith('configure'):
             tosend = parse_start_command(cmd[9:])
         elif cmd.startswith('pingpong'):
-            nloop = int(cmd.split(' ')[1])
-            pingpong(sock,nloop)
+            pingpong(sock,cmd)
             continue
         if tosend is not None:
             send = sock.send(tosend)

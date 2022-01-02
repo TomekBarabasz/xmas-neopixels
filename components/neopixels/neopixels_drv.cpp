@@ -5,6 +5,7 @@
 #include <esp_log.h>
 #include <neopixel.h>
 #include <neopixel_drv.h>
+#include <math_utils.h>
 
 using namespace Neopixel;
 using namespace NeopixelDrv;
@@ -158,9 +159,6 @@ struct SegmentInfo
     int num_leds;
     Driver *driver;
 };
-
-template <typename T>
-T min(T a, T b) { return a < b ? a : b; }
 
 struct LedStripImpl : public LedStrip
 {

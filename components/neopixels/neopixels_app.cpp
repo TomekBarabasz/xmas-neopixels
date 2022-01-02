@@ -5,6 +5,7 @@
 #include <esp_log.h>
 #include <neopixel.h>
 #include <neopixel_app.h>
+#include <math_utils.h>
 
 using namespace Neopixel;
 uint32_t esp_random(void);
@@ -230,27 +231,195 @@ struct Reel100 : Animation
 struct Random : Animation
 {
     LedStrip* strip;
-    uint16_t delay_ms;
+    uint16_t delay_new_ms;
+    uint16_t delay_fade_ms;
     uint8_t fade;
 
     Random(LedStrip *strip_, int datasize, void *data) : strip(strip_)
     {
-        delay_ms = decode<uint16_t>(data);
+        delay_new_ms = decode<uint16_t>(data);
+        delay_fade_ms = decode<uint16_t>(data);
         fade = decode<uint8_t>(data);
-        ESP_LOGI(TAG, "Random animation : delay %d fade %d", delay_ms, fade);
+        ESP_LOGI(TAG, "Random animation : delay_new_ms %d delay_fade_ms %d fade %d", delay_new_ms, delay_fade_ms, fade);
     }
     void run() override
     {
         const auto size = strip->getLength();
+        uint16_t delay = min(delay_new_ms, delay_fade_ms);
+        int delay_new = delay_new_ms, delay_fade = delay_fade_ms;
         for(;;)
         {
-            uint32_t rnd = esp_random();
-            HSV hsv = {uint16_t(rnd % 360), 255, 255};
-            strip->fillPixelsRGB((rnd>>8)%size, 1, hsv.toRGB());
+            bool doRefresh = false;
+            vTaskDelay(pdMS_TO_TICKS(delay));
+            delay_new -= delay;
+            if (delay_new < 0) {
+                uint32_t rnd = esp_random();
+                HSV hsv = {uint16_t(rnd % 360), 255, 255};
+                strip->fillPixelsRGB((rnd>>8)%size, 1, hsv.toRGB());
+                doRefresh = true;
+                delay_new = delay_new_ms;
+            }
+            delay_fade -= delay;
+            if (delay_fade < 0)
+            {
+                fade_all(strip->getBuffer(), size, fade);
+                doRefresh = true;
+                delay_fade = delay_fade_ms;
+            }
+            if (doRefresh){
+                strip->refresh();
+            }
+        }
+    }
+};
+
+struct Fire : Animation
+{
+    LedStrip* strip;
+    uint16_t delay_ms;
+    // COOLING: How much does the air cool as it rises?
+    // Less cooling = taller flames.  More cooling = shorter flames.
+    // Default 50, suggested range 20-100 
+    uint8_t cooling;
+
+    // SPARKING: What chance (out of 255) is there that a new spark will be lit?
+    // Higher chance = more roaring fire.  Lower chance = more flickery fire.
+    // Default 120, suggested range 50-200.
+    uint8_t sparking;
+
+    uint8_t direction;
+    uint16_t size;
+    uint8_t *heat;
+    Fire(LedStrip *strip_, int datasize, void *data) : strip(strip_)
+    {
+        delay_ms = decode<uint16_t>(data);
+        cooling = decode<uint8_t>(data);
+        sparking = decode<uint8_t>(data);
+        direction = decode<uint8_t>(data);
+
+        size = strip->getLength();
+        heat = new uint8_t[size];
+        ESP_LOGI(TAG, "Fire animation : delay %d cooling %d sparking %d direction %d", delay_ms, cooling, sparking, direction);
+    }
+    ~Fire()
+    {
+        delete[] heat;
+    }
+    void run() override
+    {
+        const uint8_t cooling_factor = (cooling*10) / size + 2;
+        for(;;)
+        {
+            uint32_t rnd = 0;
+            // Step 1.  Cool down every cell
+            for(int i=0;i<size;++i)
+            {
+                if (0==rnd) rnd = esp_random();
+                heat[i] = saturated_sub(heat[i], uint8_t((rnd&0xFF) % cooling_factor));
+                rnd >>= 8;
+            }
+  
+            // Step 2.  Heat from each cell drifts 'up' and diffuses a little
+            for( int k= size - 1; k >= 2; k--) {
+                heat[k] = (heat[k - 1] + heat[k - 2] + heat[k - 2] ) / 3;
+            }
+    
+            // Step 3.  Randomly ignite new 'sparks' of heat near the bottom
+            rnd = esp_random();
+            if( (rnd&0xFF) < sparking ) 
+            {
+                rnd >>= 8;
+                const uint16_t pos = uint16_t(rnd&0xFFFF) % size;
+                rnd >>= 16;
+                const uint8_t const_add = 160;
+                const uint8_t random_add = 255-const_add;
+                heat[pos] = saturated_add( heat[pos], uint8_t(const_add + uint8_t(rnd&0xFF)%random_add));
+            }
+
+            // Step 4.  Map from heat cells to LED colors
+            for( int j = 0; j < size; j++) 
+            {
+                const int pos = (direction==0 ? j : size-1-j);
+                strip->fillPixelsRGB(pos,1,HeatColor( heat[j] ));
+            }
             strip->refresh();
-            fade_all(strip->getBuffer(), size, fade);
             vTaskDelay(pdMS_TO_TICKS(delay_ms));
         }
+    }
+    RGB HeatColor(uint8_t temperature)
+    {
+        // Scale 'heat' down from 0-255 to 0-191,
+        // which can then be easily divided into three
+        // equal 'thirds' of 64 units each.
+        const uint8_t t192 = scale8_video( temperature, 191);
+
+        // calculate a value that ramps up from
+        // zero to 255 in each 'third' of the scale.
+        const uint8_t heatramp = (t192 & 0x3F) << 2; // 0..63, scale up to 0..252
+
+        // now figure out which third of the spectrum we're in:
+        if( t192 & 0x80) {
+            // we're in the hottest third
+            return {255,255,heatramp};
+        } else if( t192 & 0x40 ) {
+            // we're in the middle third
+            return {255,heatramp, 0};
+        } else {
+            // we're in the coolest third
+            return {heatramp, 0, 0};
+        }
+    }
+};
+
+struct Wave : Animation
+{
+    LedStrip* strip;
+    uint16_t delay_ms;
+    uint8_t inc;
+    uint8_t direction;
+    uint16_t size;
+    Wave(LedStrip *strip_, int datasize, void *data) : strip(strip_)
+    {
+        delay_ms = decode<uint16_t>(data);
+        inc = decode<uint8_t>(data);
+        direction = decode<uint8_t>(data);
+        size = strip->getLength();
+        ESP_LOGI(TAG, "Wave animation : delay %d inc %d direction %d", delay_ms, inc, direction);
+    }
+    void run() override
+    {
+        int start_hue = rainbow(0, inc);
+        if (direction==0) start_hue=0;
+        for(;;)
+        {
+            strip->refresh();
+            vTaskDelay(pdMS_TO_TICKS(delay_ms));
+            auto * buffer = strip->getBuffer();
+            if (direction==0)
+            {
+                memmove(buffer+1,buffer,sizeof(RGB)*(size-1));
+                start_hue -= inc;
+                if (start_hue < 0) start_hue = 360 - start_hue;
+                HSV hsv = {uint16_t(start_hue), 255,255};
+                strip->fillPixelsRGB(0,1,hsv.toRGB());
+            }else
+            {
+                memmove(buffer,buffer+1,sizeof(RGB)*(size-1));
+                start_hue += inc;
+                if (start_hue > 360) start_hue = start_hue - 360;
+                HSV hsv = {uint16_t(start_hue), 255,255};
+                strip->fillPixelsRGB(size-1,1,hsv.toRGB());
+            }
+        }
+    }
+    uint16_t rainbow(uint16_t start_hue, uint8_t inc_hue)
+    {   
+        HSV hsv = {start_hue,255,255};
+        for (int i=0;i<size;++i) {
+            strip->fillPixelsRGB(i,1,hsv.toRGB());
+            hsv.h += inc_hue;
+        }
+        return hsv.h;
     }
 };
 
@@ -299,6 +468,8 @@ static Animation* create_animation(LedStrip*strip,int animation_id, void* data)
         case 1: return new Cylon(strip, animation_data_size, data);
         case 2: return new Reel100(strip, animation_data_size, data);
         case 3: return new Random(strip, animation_data_size, data);
+        case 4: return new Fire(strip, animation_data_size, data);
+        case 5: return new Wave(strip, animation_data_size, data);
     }
 }
 static void execute_CmdStartAnimation(LedStrip *strip,void *data)
