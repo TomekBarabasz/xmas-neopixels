@@ -30,6 +30,15 @@ struct RGB
         b += other.b;
         return *this;
     }
+    RGB mix(const RGB& other, uint8_t alpha) const
+    {
+        const auto alpha16 = uint16_t(alpha);
+        const auto not_alpha16 = uint16_t(255) - alpha16;
+        uint8_t r_ = (uint8_t) ((r * alpha16 + other.r * not_alpha16) >> 8);
+        uint8_t g_ = (uint8_t) ((g * alpha16 + other.g * not_alpha16) >> 8);
+        uint8_t b_ = (uint8_t) ((b * alpha16 + other.b * not_alpha16) >> 8);
+        return { r_,g_,b_ };
+    }
 };
 
 struct HSV

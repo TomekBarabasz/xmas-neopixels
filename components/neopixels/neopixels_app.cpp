@@ -45,10 +45,52 @@ T decode(void*& data)
     return v;
 }
 
+template <typename T>
+T decode_safe(void*& data, int& datasize, T value)
+{
+    if (datasize >= sizeof(T))
+    {
+        T* pv = reinterpret_cast<T*>(data);
+        T v = *pv++;
+        data = pv;
+        datasize -= sizeof(T);
+        return v;
+    }else return value;
+}
+
 static void fade_all(RGB *leds, int size, uint8_t scale)
 {
     for (int i=0;i<size;++i) {
         leds[i].scale8(scale);
+    }
+}
+
+template <typename T>
+void rotLeft(int first, int count, int n_rot, T* buffer, T* tmp)
+{
+    buffer += first;
+    for (int i = 0; i < n_rot; ++i) {
+        tmp[i] = buffer[i];
+    }
+    for (int i = n_rot; i < count; ++i) {
+        buffer[i - n_rot] = buffer[i];
+    }
+    for (int i = 0; i < n_rot; ++i) {
+        buffer[i + count - n_rot] = tmp[i];
+    }
+}
+template <typename T>
+void rotRight(int first, int count, int n_rot, T* buffer, T* tmp)
+{
+    buffer += first;
+    for (int i = 0; i < n_rot; ++i) {
+        tmp[i] = buffer[count - n_rot + i];
+    }
+    for (int i = count - n_rot - 1; i >= 0; --i) {
+        buffer[i + n_rot] = buffer[i];
+    }
+    for (int i = 0; i < n_rot; ++i) {
+        buffer[i] = tmp[i];
     }
 }
 
@@ -87,33 +129,68 @@ struct Colortest : public Animation
 struct Cylon : Animation
 {
     LedStrip* strip;
-    uint16_t delay_ms;
-    uint8_t inc;
+    uint16_t delay_snake_ms, delay_bkg_ms;
+    int8_t inc_snake, inc_backgroud;
     uint8_t fade;
+    HSV background;
+
     Cylon(LedStrip *strip_, int datasize, void *data) : strip(strip_)
     {
-        delay_ms = decode<uint16_t>(data);
-        inc = decode<uint8_t>(data);
+        delay_snake_ms = decode<uint16_t>(data);
+        delay_bkg_ms = decode<uint16_t>(data);
+        inc_snake = decode<int8_t>(data);
+        inc_backgroud = decode<int8_t>(data);
         fade = decode<uint8_t>(data);
-        ESP_LOGI(TAG, "Cylon animation : delay %d inc %d fade %d", delay_ms, inc, fade);
+        auto background_hsv = decode<uint32_t>(data);
+        background = {uint16_t(background_hsv>>16), uint8_t((background_hsv>>8)&0xFF), uint8_t(background_hsv&0xFF)};
+
+        ESP_LOGI(TAG, "Cylon animation : snake delay %d background delay %d snake inc %d background inc %d fade %d background hsv %x", delay_snake_ms, delay_bkg_ms, inc_snake, inc_backgroud, fade, background_hsv);
     }
     void run() override
     {
         const auto size = strip->getLength();
-        HSV hsv {0,255,255};
+        HSV hsv {0,255,255}, bkg_hsv = background;
+        RGB bkg_rgb;
         int count = size;
         int i = 0;
         int dir = +1;
+        int snake_delay = delay_snake_ms;
+        int bkg_delay = delay_bkg_ms;
+        const uint16_t delay = min(delay_snake_ms, delay_bkg_ms);
+
+        bkg_rgb = bkg_hsv.toRGB();
+        strip->fillPixelsRGB(0,size,bkg_rgb);
+
         for(;;)
         {
             while(count-->0)
             {
-                hsv.h += inc;
+                auto buffer = strip->getBuffer();
+                for (int j=0; j<size;++j) {
+                    buffer[j] = buffer[j].mix(bkg_rgb, fade);
+                }
                 strip->fillPixelsRGB(i,1,hsv.toRGB());
                 strip->refresh();
-                fade_all(strip->getBuffer(), size, fade);
-                i += dir;
-                vTaskDelay(pdMS_TO_TICKS(delay_ms));
+                
+                vTaskDelay(pdMS_TO_TICKS(delay));
+                snake_delay -= delay;
+                if (snake_delay <=0) {
+                    i += dir;
+                    int hsv_h = hsv.h + inc_snake;
+                    if (hsv_h>360) hsv.h = uint16_t(hsv_h - 360);
+                    else if (hsv_h<0) hsv.h = uint16_t(hsv_h + 360);
+                    else hsv.h = uint16_t(hsv_h);
+                    snake_delay = delay_snake_ms;
+                }
+                bkg_delay -= delay;
+                if (bkg_delay <= 0) {
+                    int bkg_hsv_h = bkg_hsv.h + inc_backgroud;
+                    if (bkg_hsv_h>360) bkg_hsv.h = uint16_t(bkg_hsv_h - 360);
+                    else if (bkg_hsv_h<0) bkg_hsv.h = uint16_t(bkg_hsv_h + 360);
+                    else bkg_hsv.h = uint16_t(bkg_hsv_h);
+                    bkg_rgb = bkg_hsv.toRGB();
+                    bkg_delay = delay_bkg_ms;
+                }
             }
             if (dir>0) {
                 dir = -1;
@@ -380,9 +457,9 @@ struct Wave : Animation
     uint16_t size;
     Wave(LedStrip *strip_, int datasize, void *data) : strip(strip_)
     {
-        delay_ms = decode<uint16_t>(data);
-        inc = decode<uint8_t>(data);
-        direction = decode<uint8_t>(data);
+        delay_ms  = decode_safe<uint16_t>(data, datasize, 500);
+        inc       = decode_safe<uint8_t> (data, datasize, 1);
+        direction = decode_safe<uint8_t> (data, datasize, 0);
         size = strip->getLength();
         ESP_LOGI(TAG, "Wave animation : delay %d inc %d direction %d", delay_ms, inc, direction);
     }
@@ -397,16 +474,23 @@ struct Wave : Animation
             auto * buffer = strip->getBuffer();
             if (direction==0)
             {
-                memmove(buffer+1,buffer,sizeof(RGB)*(size-1));
+                //memmove(buffer+1,buffer,sizeof(RGB)*(size-1));
+                for (int j=size-1;j>0;--j) {
+                    buffer[j] = buffer[j-1];
+                }
                 start_hue -= inc;
-                if (start_hue < 0) start_hue = 360 - start_hue;
+                if (start_hue < 0) start_hue += 360;
                 HSV hsv = {uint16_t(start_hue), 255,255};
                 strip->fillPixelsRGB(0,1,hsv.toRGB());
-            }else
+            }
+            else
             {
-                memmove(buffer,buffer+1,sizeof(RGB)*(size-1));
+                //memmove(buffer,buffer+1,sizeof(RGB)*(size-1));
+                for (int j=0;j<size-1;++j) {
+                    buffer[j] = buffer[j+1];
+                }
                 start_hue += inc;
-                if (start_hue > 360) start_hue = start_hue - 360;
+                if (start_hue > 360) start_hue -= 360;
                 HSV hsv = {uint16_t(start_hue), 255,255};
                 strip->fillPixelsRGB(size-1,1,hsv.toRGB());
             }
@@ -423,6 +507,196 @@ struct Wave : Animation
     }
 };
 
+struct Subset {int first; int count; int dir;};
+static constexpr Subset Rings[]
+{
+    {0, 42, 0},
+    {42,36, 1},
+    {78,37, 0},
+    {115,37, 1},
+    {152,47, 0},
+    {199,15, 1},
+    {214,17, 1},
+    {231,18, 1}
+};
+static constexpr int NumRings = sizeof(Rings)/sizeof(Rings[0]);
+
+static constexpr Subset Strips[]
+{
+    {  0,26, 0}, //dir=0 is up
+    { 26,27, 1},
+    { 53,26, 0},
+    { 79,25, 1},
+    {104,26, 0},
+    {130,29, 1},
+    {159,31, 1},
+    {190,21, 1},
+    {231,19, 1}
+};
+static constexpr int NumStrips = sizeof(Strips)/sizeof(Strips[0]);
+
+struct RotatingRings2 : Animation
+{  
+    LedStrip* strip;
+    uint16_t delay_ms;
+    uint16_t ring_move;
+    uint8_t ring_inc,base_inc;
+    RGB base_color, ring_color;
+    uint8_t fade;
+
+    RotatingRings2(LedStrip *strip_, int datasize, void *data) : strip(strip_)
+    {
+        delay_ms = decode<uint16_t>(data);
+        ring_move = decode<uint16_t>(data);
+        ring_inc = decode<uint8_t>(data);
+        base_inc = decode<uint8_t>(data);
+        uint32_t base_color_ = decode<uint32_t>(data);
+        base_color = {uint8_t(base_color_>>16), uint8_t(base_color_>>8), uint8_t(base_color_&0xFF)};    //0x00RRGGBB
+        uint32_t ring_color_ = decode<uint32_t>(data);
+        ring_color = {uint8_t(ring_color_>>16), uint8_t(ring_color_>>8), uint8_t(ring_color_&0xFF)};
+        fade = decode<uint8_t>(data);
+        ESP_LOGI(TAG, "RotatingRings animation : delay ms %d ring_move %d ring inc %x base inc %x ring color %x base color %x", delay_ms, ring_move, ring_inc, base_inc, ring_color_, base_color_);
+    }
+    void run() override
+    {
+    #if 0
+        const auto size = strip->getLength();
+        auto buffer = strip->getBuffer();
+        int current_ri = 0, dir = 1;
+        int ms_to_move_ring = 0;
+        strip->fillPixelsRGB(0,size,base_color);
+        for(;;)
+        {
+            if (ms_to_move_ring <= 0) 
+            {
+                current_ri += dir;
+                if (current_ri >= NumRings) {
+                    current_ri = NumRings-2;
+                    dir = -1;
+                } else if (current_ri < 0) {
+                    current_ri = 1;
+                    dir = +1;
+                }
+                const Ring& ring = Rings[current_ri];
+                strip->fillPixelsRGB(ring.first,ring.length,ring_color);
+                ms_to_move_ring = move_delay_ms;
+            }
+            for(int ri=0;ri<NumRings;++ri) {
+                if (ri!=current_ri) {
+                    for (int i=0;i<r[1];++i) {
+                        buffer[r[0] + i].mix(base_color, fade);
+                    }
+                }
+            }
+            strip->refresh();
+            vTaskDelay(pdMS_TO_TICKS(fade_delay_ms));
+            ms_to_move_ring -=fade_delay_ms;
+        }
+    #endif
+    }
+};
+
+struct VerticalRings : Animation
+{  
+    static constexpr int NumRings = sizeof(Rings)/sizeof(Rings[0]);
+    LedStrip* strip;
+    uint16_t delay_ms;
+    int8_t ring_move;
+    int8_t ring_step;
+
+    VerticalRings(LedStrip *strip_, int datasize, void *data) : strip(strip_)
+    {
+        delay_ms  = decode_safe<uint16_t>(data,datasize,100);
+        ring_step = decode_safe<int16_t>(data,datasize,10);
+        ring_move = decode_safe<int16_t>(data,datasize,10);
+        ESP_LOGI(TAG, "VerticalRings animation : delay ms %d ring_move %d ring step %d", delay_ms, ring_move, ring_step);
+    }
+    void run() override
+    {
+        HSV hsv = {0,255,255};
+        int hue[NumRings] = {};
+        for (int r=0;r<NumRings;++r) {
+            hue[r] = ring_step * r;
+            if (hue[r]>360)     hue[r] -= 360;
+            else if (hue[r]<0)  hue[r] += 360;
+        }
+        
+        for(;;)
+        {
+            for (int r=0;r<NumRings;++r) {
+                hsv = {uint16_t(hue[r]), 255,255};
+                auto & ring = Rings[r];
+                strip->fillPixelsRGB(ring.first,ring.count,hsv.toRGB());
+                hue[r] += ring_move;
+                if (hue[r]>360)     hue[r] -= 360;
+                else if (hue[r]<0)  hue[r] += 360;
+            }
+            strip->refresh();
+            vTaskDelay(pdMS_TO_TICKS(delay_ms));
+        }
+    }
+};
+struct RotatingRings : Animation
+{  
+    static constexpr int NumRings = sizeof(Rings)/sizeof(Rings[0]);
+    LedStrip* strip;
+    uint16_t delay_ms;
+    int16_t angular_speed;  //deg/sec
+    int8_t num_hues;
+    RGB tmp[250];
+
+    RotatingRings(LedStrip *strip_, int datasize, void *data) : strip(strip_)
+    {
+        delay_ms  = decode_safe<uint16_t>(data,datasize,100);
+        angular_speed = decode_safe<int16_t>(data,datasize,10);
+        num_hues = decode_safe<uint8_t>(data,datasize,90);
+        ESP_LOGI(TAG, "RotatingRings animation : delay ms %d angular_speed %d num_hues %d", delay_ms, angular_speed, num_hues);
+    }
+    void run() override
+    {
+        int rot[NumRings] = {0};
+        const int deg_per_tick = 256 * angular_speed * delay_ms / 1000;
+        
+        for (auto & ring : Rings) 
+        {
+            const int hinc = 360 * 256 / ring.count * (0==ring.dir ? 1 : -1);
+            int h = (0==ring.dir ? 0 : 360*256);
+            
+            HSV hsv = {0,255,255};
+            for (int i=ring.first; i<ring.first+ring.count;++i) {
+                hsv.h = uint16_t( ((h>>8) / num_hues) * num_hues );
+                strip->fillPixelsRGB(i,1,hsv.toRGB());
+                h += hinc;
+            }
+        }
+        strip->refresh();
+        vTaskDelay(pdMS_TO_TICKS(delay_ms));
+        for(;;)
+        {
+            auto buffer = strip->getBuffer();
+            for (int i=0;i<NumRings;++i) 
+            {
+                auto & ring = Rings[i];
+                const int step = 360 * 256 / ring.count;
+                rot[i] += deg_per_tick;
+                if (rot[i] > step) 
+                {
+                    const int n = rot[i] / step;
+                    rot[i] -= n*step;
+
+                    if (0==ring.dir) {
+                        rotLeft(ring.first, ring.count, n, buffer, tmp);
+                    }
+                    else {
+                        rotRight(ring.first, ring.count, n, buffer, tmp);
+                    }
+                }
+            }        
+            strip->refresh();
+            vTaskDelay(pdMS_TO_TICKS(delay_ms));
+        }
+    }
+};
 esp_event_loop_handle_t create_event_loop()
 {
     esp_event_loop_args_t loop_args = {
@@ -470,6 +744,8 @@ static Animation* create_animation(LedStrip*strip,int animation_id, void* data)
         case 3: return new Random(strip, animation_data_size, data);
         case 4: return new Fire(strip, animation_data_size, data);
         case 5: return new Wave(strip, animation_data_size, data);
+        case 6: return new VerticalRings(strip, animation_data_size, data);
+        case 7: return new RotatingRings(strip, animation_data_size, data);
     }
 }
 static void execute_CmdStartAnimation(LedStrip *strip,void *data)
@@ -519,10 +795,13 @@ static void start_default_animation(esp_event_loop_handle_t loop_handle)
     void *p = default_animation_params;
     encode<uint8_t>(p, NeopixelApp::CmdStartAnimation);
     encode<uint16_t>(p, 1);
-    encode<uint16_t>(p, 4);
-    encode<uint16_t>(p, 10);
-    encode<uint8_t>(p,  1);
-    encode<uint8_t>(p,  250);
+    encode<uint16_t>(p, 11);
+    encode<uint16_t>(p, 20);
+    encode<uint16_t>(p, 100);
+    encode<int8_t>(p,  5);
+    encode<int8_t>(p,  1);
+    encode<uint8_t>(p, 252);
+    encode<uint32_t>(p,  0x00EDA356);
     ESP_LOGI(TAG, "neopixel_main : starting default animation, params ptr %p", default_animation_params);
     ESP_ERROR_CHECK(esp_event_post_to(loop_handle, NEOPIXEL_EVENTS, 0, default_animation_params, sizeof(default_animation_params), portMAX_DELAY));
 }
@@ -563,7 +842,7 @@ extern "C" void neopixel_main(void* params)
     LedStripConfig cfg = {1,2,segments};
 #else
     RMTDriverConfig rmt = {GPIO_NUM_16, RMT_CHANNEL_0, 8};
-    LedSegmentConfig segment {150, SegmentType::WS2811, DriverType::RMT, &rmt};
+    LedSegmentConfig segment {250, SegmentType::WS2811, DriverType::RMT, &rmt};
     LedStripConfig cfg = {1,1,&segment};
 #endif
     strip = LedStrip::create(cfg);
