@@ -523,15 +523,16 @@ static constexpr int NumRings = sizeof(Rings)/sizeof(Rings[0]);
 
 static constexpr Subset Strips[]
 {
-    {  0,26, 0}, //dir=0 is up
-    { 26,27, 1},
-    { 53,26, 0},
-    { 79,25, 1},
-    {104,26, 0},
-    {130,29, 1},
-    {159,31, 1},
-    {190,21, 1},
-    {231,19, 1}
+    {  0,28, 0}, //dir=0 is up
+    { 31,25, 1},
+    { 57,25, 0},
+    { 86,24, 1},
+    {111,25, 0},
+    {138,25, 1},
+    {164,27, 0},
+    {194,20, 1},
+    {215,20, 0},
+    {237,12, 1}
 };
 static constexpr int NumStrips = sizeof(Strips)/sizeof(Strips[0]);
 
@@ -697,6 +698,269 @@ struct RotatingRings : Animation
         }
     }
 };
+
+struct RotatingStrips : Animation
+{  
+    LedStrip* strip;
+    uint16_t delay_ms;
+    int16_t angular_speed;  //deg/sec
+    int8_t hue_quant;
+    RGB tmp[250];
+
+    RotatingStrips(LedStrip *strip_, int datasize, void *data) : strip(strip_)
+    {
+        delay_ms  = decode_safe<uint16_t>(data,datasize,100);
+        angular_speed = decode_safe<int16_t>(data,datasize,10);
+        hue_quant = decode_safe<uint8_t>(data,datasize,90);
+        ESP_LOGI(TAG, "RotatingRings strips : delay ms %d angular_speed %d hue_quant %d", delay_ms, angular_speed, hue_quant);
+    }
+    void run() override
+    {
+        const int deg_per_tick = 256 * angular_speed * delay_ms / 1000;
+        const int hinc = 360 * 256 / NumStrips;
+
+        uint16_t hue[NumStrips];
+        int rot = 0;
+        int h = 0;
+
+        for (int i=0;i<NumStrips;++i) 
+        {
+            hue[i] = uint16_t( ((h>>8) / hue_quant) * hue_quant );
+            h += hinc;
+        }
+        for(;;)
+        {
+            int i0   = (rot / hinc) / 256;
+            uint8_t fade = (rot % hinc) / 256;
+            if (i0 >= NumStrips) i0 -= NumStrips;
+            else if (i0 < 0) i0 += NumStrips;
+            int i1 = i0 + 1;
+            if (i1 >= NumStrips) i1 -= NumStrips;
+            else if (i1 < 0) i1 += NumStrips;
+
+            for (int i=0;i<NumStrips;++i) 
+            {
+                auto & vstrip = Strips[i];
+                h = ( (hue[i1] - hue[i0]) * fade) / 256;
+                HSV hsv = { uint16_t(h) ,255,255};
+                strip->fillPixelsRGB(vstrip.first,vstrip.count,hsv.toRGB());
+                i0 += 1;
+                if (i0 >= NumStrips) i0 -= NumStrips;
+                i1 += 1;
+                if (i1 >= NumStrips) i1 -= NumStrips;
+            }
+            rot += deg_per_tick;
+            if (rot > 256*256)       rot -= 256*256;
+            else if (rot < -256*256) rot += 256*256;
+
+            strip->refresh();
+            vTaskDelay(pdMS_TO_TICKS(delay_ms));
+        }
+    }
+};
+
+struct BackgroundAnimation
+{
+};
+
+/* FallingStars parameters:
+** H: <refresh delay>
+** B: <new star chance>
+** B: <star length>
+** B: <star speed>  leds/<refresh_delay>
+** B: <background change speed> <steps/sec>, full change = 255 steps
+** B: <bacground change mode : 0 cyclic 1 pingpong>
+** B: <num bacground colors>
+** I: <background color>...
+*/
+struct FallingStars : Animation
+{  
+    LedStrip* strip;
+    uint16_t delay_ms;
+    uint8_t new_star_chance, star_length, star_speed, bkg_change_rate;
+    uint8_t bkg_change_mode, num_bkg_colors;
+    RGB *bkg_colors;
+
+    int bkg_i0 = 0, bkg_i1=1;
+    int bkg_fade = 0;
+    int bkg_dir = 1;
+
+    struct Star
+    {
+    };
+    FallingStars(LedStrip *strip_, int datasize, void *data) : strip(strip_)
+    {
+        delay_ms  = decode_safe<uint16_t>(data,datasize,100);
+        new_star_chance = decode_safe<uint8_t>(data,datasize,125);
+        star_length = decode_safe<uint8_t>(data,datasize,5);
+        star_speed = decode_safe<uint8_t>(data,datasize,1);
+        bkg_change_rate = decode_safe<uint8_t>(data,datasize,50);
+        bkg_change_mode = decode_safe<uint8_t>(data,datasize,0);
+        num_bkg_colors = decode_safe<uint8_t>(data,datasize,2);
+        bkg_colors = new RGB[num_bkg_colors];
+        for (int i=0;i<num_bkg_colors;++i)
+        {
+            uint32_t ihsv = decode_safe<uint32_t>(data,datasize,0);
+            HSV hsv = {uint16_t(ihsv>>16), uint8_t((ihsv>>8)&0xFF), uint8_t(ihsv&0xFF)};
+            bkg_colors[i] = hsv.toRGB();
+        }
+
+        ESP_LOGI(TAG, "FallingStars animation : delay ms %d ... ", delay_ms);
+    }
+    ~FallingStars()
+    { 
+        delete[] bkg_colors;
+    }
+    void doBackground()
+    {
+        if (1==num_bkg_colors) return;
+
+        //0 1 2 3  (4 bkg colors)
+        bkg_fade += bkg_change_rate;
+        if (bkg_fade > 255) 
+        {
+            bkg_fade -= 255;
+            bkg_i0 += bkg_dir;
+            bkg_i1 += bkg_dir;
+            //(0,1) (1,2) ->
+            if (bkg_dir > 0 && bkg_i0 >= num_bkg_colors-1) 
+            {
+                if (0==bkg_change_mode) {
+                    bkg_i0 = 0;
+                    bkg_i1 = 1;
+                } else {
+                    bkg_i0 = num_bkg_colors-1;
+                    bkg_i1 = num_bkg_colors-2;
+                    bkg_dir = -1;
+                }
+            }
+            else if (bkg_dir < 0 && bkg_i0==1) 
+            {
+                if (0==bkg_change_mode) {
+                    bkg_i0 = 0;
+                    bkg_i1 = 1;
+                } else {
+                    bkg_i0 = num_bkg_colors-1;
+                    bkg_i1 = num_bkg_colors-2;
+                    bkg_dir = -1;
+                }
+            }
+        }
+    }
+    void doStars()
+    {
+
+    }
+    void run() override
+    {
+        strip->fillPixelsRGB(0, strip->getLength(), *bkg_colors);
+        for(;;)
+        {
+            doBackground();
+            doStars();
+            strip->refresh();
+            vTaskDelay(pdMS_TO_TICKS(delay_ms));
+        }
+    }
+};
+
+/* VerticalWave parameters:
+** H:<refresh delay>
+** B:<hue inc>
+** B:<direction> 0: up 1:down
+*/
+struct VerticalWave : Animation
+{  
+    LedStrip* strip;
+    uint16_t delay_ms;
+    uint8_t hue_inc;
+    uint8_t direction;
+
+    VerticalWave(LedStrip *strip_, int datasize, void *data) : strip(strip_)
+    {
+        delay_ms  = decode_safe<uint16_t>(data,datasize,100);
+        hue_inc = decode_safe<uint8_t>(data,datasize,10);
+        direction = decode_safe<uint8_t>(data,datasize,0);
+        ESP_LOGI(TAG, "VerticalWave animation: delay ms %d hue_inc %d direction %d", delay_ms, hue_inc, direction);
+    }
+    void run() override
+    {
+        for (auto & s : Strips)
+        {
+            HSV hsv = {uint16_t(0==s.dir ? 0 : s.count*hue_inc),255,255};
+            int inc = (0==s.dir ? hue_inc : -hue_inc);
+            for (int i = s.first; i < s.first+s.count; ++i) {
+                strip->fillPixelsRGB(i,1,hsv.toRGB());
+                hsv.h += inc;
+            }
+        }
+        strip->refresh();
+        for(;;)
+        {
+            auto * buffer = strip->getBuffer();
+            RGB rgb;
+            for (auto & s : Strips)
+            {
+                if (direction == s.dir) {
+                    rotLeft(s.first, s.count, 1, buffer, &rgb);
+                }else {
+                    rotRight(s.first, s.count, 1, buffer, &rgb);
+                }
+            }
+            strip->refresh();
+            vTaskDelay(pdMS_TO_TICKS(delay_ms));
+        }
+    }
+};
+
+/* VerticalWave parameters:
+** H:<refresh delay>
+** B:<hue inc>
+** B:<direction> 0: up 1:down
+*/
+struct HorizontalWave : Animation
+{  
+    LedStrip* strip;
+    uint16_t delay_ms;
+    uint8_t hue_step,hue_inc;
+    uint8_t direction;
+    int16_t stripHue[NumStrips];
+
+    HorizontalWave(LedStrip *strip_, int datasize, void *data) : strip(strip_)
+    {
+        delay_ms  = decode_safe<uint16_t>(data,datasize,100);
+        hue_step = decode_safe<uint8_t>(data,datasize,10);
+        hue_inc = decode_safe<uint8_t>(data,datasize,1);
+        direction = decode_safe<uint8_t>(data,datasize,0);
+        ESP_LOGI(TAG, "VerticalWave animation: delay ms %d hue_inc %d direction %d", delay_ms, hue_inc, direction);
+    }
+    void run() override
+    {
+        stripHue[0]=0;
+        for (int i=1;i<NumStrips;++i){
+            stripHue[i] = stripHue[i-1] + hue_step;
+        }
+        strip->fillPixelsRGB(0,strip->getLength(),{0,0,0});
+        for(;;)
+        {
+            HSV hsv = {0,255,255};
+            auto *hue = stripHue;
+            for (auto & s : Strips)
+            {
+                hsv.v = *hue;
+                strip->fillPixelsRGB(s.first,s.count,hsv.toRGB());
+                *hue += hue_inc;
+                if (*hue > 360) *hue-=360;
+                else if (*hue < 0) *hue += 360;
+                ++hue;
+            }
+            strip->refresh();
+            vTaskDelay(pdMS_TO_TICKS(delay_ms));
+        }
+    }
+};
+
+
 esp_event_loop_handle_t create_event_loop()
 {
     esp_event_loop_args_t loop_args = {
@@ -746,6 +1010,10 @@ static Animation* create_animation(LedStrip*strip,int animation_id, void* data)
         case 5: return new Wave(strip, animation_data_size, data);
         case 6: return new VerticalRings(strip, animation_data_size, data);
         case 7: return new RotatingRings(strip, animation_data_size, data);
+        case 8: return new RotatingStrips(strip, animation_data_size, data);
+        case 9: return new FallingStars(strip, animation_data_size, data);
+        case 10: return new VerticalWave(strip, animation_data_size, data);
+        case 11: return new HorizontalWave(strip, animation_data_size, data);
     }
 }
 static void execute_CmdStartAnimation(LedStrip *strip,void *data)

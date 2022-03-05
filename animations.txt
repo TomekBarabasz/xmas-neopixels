@@ -4,3 +4,7 @@ rand-slow 3 H:400 H:20 B:220
 rand-fast 3 H:40 H:20 B:200
 fire 4 H:100 B:70 B:100 B:0
 wave-1 5 H:50 B:2 B:0
+#anim 7 (rotating rings)
+rings-1 7 H:300 h:30 B:90
+#anim 8 (rotating strips) H:<delay_ms> h:<angular_speed> B:<hue_quant> i.e. hue = (hue/hue_quant)*hue_quant
+strips-1 8 H:300 h:30 B:10
