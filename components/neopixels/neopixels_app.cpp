@@ -6,6 +6,7 @@
 #include <neopixel.h>
 #include <neopixel_app.h>
 #include <math_utils.h>
+#include "Animation.hpp"
 
 using namespace Neopixel;
 uint32_t esp_random(void);
@@ -15,19 +16,19 @@ namespace NeopixelApp
 ESP_EVENT_DEFINE_BASE(NEOPIXEL_EVENTS);
 TaskHandle_t animationTask = NULL;
 LedStrip *strip = nullptr;
-struct Animation
-{
-    static void main(void*param)
-    {
-        auto anim = reinterpret_cast<Animation*>(param);
-        anim->run();
-    }
-    virtual void run() = 0;
-    virtual ~Animation(){}
-};
+
 Animation *currentAnimation = nullptr;
 static const char* TAG = "npx-app";
 
+void Animation::main(void*param)
+{
+    auto anim = reinterpret_cast<Animation*>(param);
+    for(;;)
+    {
+        anim->step();
+        vTaskDelay(pdMS_TO_TICKS(anim->get_delay_ms()));
+    }
+}
 template <typename T>
 void encode(void*& data, T v)
 {

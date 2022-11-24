@@ -1,4 +1,5 @@
 build/*
+components/neopixels/test/build/*
 notatki.txt
 sdkconfig
 sdkconfig.old
