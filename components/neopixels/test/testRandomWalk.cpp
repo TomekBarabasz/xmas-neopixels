@@ -1,57 +1,28 @@
 #include <gtest/gtest.h>
+#include "gmock/gmock.h"
 #include <tuple>
 #include <RandomWalkAnimation.hpp>
+#include <led_strip.hpp>
 
 using namespace ::testing;
 using namespace Neopixel;
 
+struct MockLedStrip : public LedStrip 
+{
+    MOCK_METHOD( int,  getLength,    (), (const));
+    MOCK_METHOD( RGB*, getBuffer,    ());
+    MOCK_METHOD( void, setPixelsRGB, (int first, int num, const RGB*));
+    MOCK_METHOD( void, fillPixelsRGB,(int first, int num, const RGB&));
+    MOCK_METHOD( void, setPixelsHSV, (int first, int num, const HSV*));
+    MOCK_METHOD( void, refresh,      (bool wait));
+    MOCK_METHOD( void, copyFrontToBack,());
+    MOCK_METHOD( bool, waitReady,    (uint32_t timeout_ms));
+    MOCK_METHOD( void, release,      ());
+};
+
 TEST(RandomWalk, Init) 
 {
-    LedStrip *p=nullptr;
-    RandomWalkAnimation a(nullptr,0,nullptr);
+    MockLedStrip strip;
+    RandomWalkAnimation a(&strip,0,nullptr);
 }
 
-TEST(RandomWalk, findClosest_equal)
-{
-    //neighbours are indices!
-    int vector[] = {1,2,3};
-    auto [a,b,n] = find_closest(vector,3,1);
-    EXPECT_EQ(a,0);
-    EXPECT_EQ(n,1);
-
-    std::tie(a,b,n) = find_closest(vector,3,2);
-    EXPECT_EQ(a,1);
-    EXPECT_EQ(n,1);
-
-    std::tie(a,b,n) = find_closest(vector,3,3);
-    EXPECT_EQ(a,2);
-    EXPECT_EQ(n,1);
-}
-
-TEST(RandomWalk, findClosest_middle)
-{
-    //neighbours are indices!
-    int vector[] = {1,3,5};
-    auto [a,b,n] = find_closest(vector,3,2);
-    EXPECT_EQ(a,1);
-    EXPECT_EQ(b,0);
-    EXPECT_EQ(n,2);
-
-    std::tie(a,b,n) = find_closest(vector,3,4);
-    EXPECT_EQ(a,2);
-    EXPECT_EQ(b,1);
-    EXPECT_EQ(n,2);
-}
-
-TEST(RandomWalk, findClosest_outside)
-{
-    //neighbours are indices!
-    int vector[] = {1,3,5};
-    auto [a,b,n] = find_closest(vector,3,0);
-    EXPECT_EQ(a,0);
-    EXPECT_EQ(n,1);
-
-    std::tie(a,b,n) = find_closest(vector,3,6);
-    EXPECT_EQ(a,2);
-    EXPECT_EQ(n,1);
-}

@@ -1,13 +1,15 @@
 #include <cstdint>
 #include <color.hpp>
 #include <led_strip.hpp>
-#include "RandomWalkAnimation.hpp"
+#include <RandomWalkAnimation.hpp>
 
 namespace Neopixel
 {
 RandomWalkAnimation::RandomWalkAnimation(LedStrip *strip_, int datasize, void *data) : strip(strip_)
 {
 }
+RandomWalkAnimation::~RandomWalkAnimation()
+{}
 void RandomWalkAnimation::step()
 {
     const auto size = strip->getLength();

@@ -18,9 +18,23 @@ target_link_libraries(libut_gtest
 )
 add_library(random-walk-animation SHARED 
     ../RandomWalkAnimation.cpp
+    ../collections.cpp
+)
+target_compile_options(random-walk-animation PUBLIC
+    -O0 -g
+)
+target_link_options(random-walk-animation PUBLIC
+    "-Wl,--no-undefined"
+)
+target_link_libraries(random-walk-animation
+    stdc++
 )
 add_executable(neopixels_ut 
     testRandomWalk.cpp
+    testCollections.cpp
+)
+target_compile_options(neopixels_ut PUBLIC
+    -O0 -g
 )
 target_link_libraries(neopixels_ut
     random-walk-animation

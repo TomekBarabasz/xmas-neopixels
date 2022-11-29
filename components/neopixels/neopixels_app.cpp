@@ -6,7 +6,8 @@
 #include <neopixel.h>
 #include <neopixel_app.h>
 #include <math_utils.h>
-#include "Animation.hpp"
+#include <Animation.hpp>
+#include <subset.hpp>
 
 using namespace Neopixel;
 uint32_t esp_random(void);
@@ -508,7 +509,6 @@ struct Wave : Animation
     }
 };
 
-struct Subset {int first; int count; int dir;};
 static constexpr Subset Rings[]
 {
     {0, 42, 0},
