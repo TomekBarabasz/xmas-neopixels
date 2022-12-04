@@ -66,16 +66,6 @@ TEST(pow2, basic)
     }
 }
 
-template <size_t N>
-Strips* makeStrips(Subset (&su)[N])
-{
-    auto * raw = new uint8_t[sizeof(uint16_t) + N*sizeof(Subset)];
-    Strips *pstrips = reinterpret_cast<Strips*>(raw);
-    pstrips->count = N;
-    memcpy(pstrips->element,su,sizeof(su));
-    return pstrips;
-}
-
 void compareNeighbours(const NeighboursMatrix& m, int idx, std::initializer_list<uint16_t> values, bool print=false)
 {
     auto & ne = m.getNeighbours(idx);

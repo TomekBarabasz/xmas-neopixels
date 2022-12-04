@@ -5,24 +5,34 @@
 namespace Neopixel
 {
 struct LedStrip;
+struct NeighboursMatrix;
+struct Strips;
+struct RandomGenerator;
 class RandomWalkAnimation : public Animation
 {
 public:
-    RandomWalkAnimation(LedStrip *strip_, int datasize, void *data);
+    RandomWalkAnimation(LedStrip *strip_, int datasize, void *data,const Strips*, RandomGenerator*);
     ~RandomWalkAnimation();
     void step() override;
     uint16_t get_delay_ms() override { return delay_ms; }
-private:    
-    LedStrip* strip;
-    uint16_t delay_ms;
+
+    uint16_t getNextHue();
+    uint16_t calcNextPosition();
+    void setCurrentPixel(uint16_t idx);
+
+    LedStrip* strip = {nullptr};
+    RandomGenerator * rand;
+    NeighboursMatrix *neighbours = {nullptr};
+    uint16_t delay_ms, fade_delay_ms;
+    uint16_t hue_min,hue_max;
+    int8_t hue_inc;
+    uint8_t hue_wrap, hue_fade;
+    uint16_t totalPixels;
+
+    int16_t current_hue = {0};
+    uint8_t* brightness = {nullptr};
+    uint16_t current_position = 0;
+    uint16_t time_to_fade_ms = {0};
 };
 
-
-
-}
-
-extern "C"
-{
-    int find_closest_i(const int* vector, int size, int val, int result[2]);
-    int find_closest_f(const float* vector, int size, float val, int result[2]);
 }

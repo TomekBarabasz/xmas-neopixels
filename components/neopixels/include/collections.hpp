@@ -2,6 +2,7 @@
 #include <tuple>
 #include <cstdint>
 #include <cstddef>
+#include <numeric>
 
 namespace Neopixel
 {
@@ -14,10 +15,23 @@ struct Subset
 struct Strips
 {
     static Strips* loadFromBuffer(char*buffer,size_t size);
+    uint16_t getTotalPixelsCount() const
+    {
+        return std::accumulate(element,element + count, 0, [](int v, const Subset& s){return v+s.count;});
+    }
     uint16_t count;
     Subset element[];
     //consecutive elements placed next
 };
+template <size_t N>
+Strips* makeStrips(Subset (&su)[N])
+{
+    auto * raw = new uint8_t[sizeof(uint16_t) + N*sizeof(Subset)];
+    Strips *pstrips = reinterpret_cast<Strips*>(raw);
+    pstrips->count = N;
+    memcpy(pstrips->element,su,sizeof(su));
+    return pstrips;
+}
 void release(Strips*);
 struct Neighbours
 {

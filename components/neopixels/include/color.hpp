@@ -37,6 +37,12 @@ struct RGB
         return { r_,g_,b_ };
     }
 };
+inline void fade_all(RGB *leds, int size, uint8_t scale)
+{
+    for (int i=0;i<size;++i) {
+        leds[i].scale8(scale);
+    }
+}
 struct HSV
 {
     enum class Hue {

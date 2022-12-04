@@ -59,8 +59,6 @@ namespace
             auto & s = strips->element[i];
             auto fcount = float(strips->element[i].count);
             int pi = i * row_size;
-            //float dv = (fcount / float(longest)) * s.dir;
-            //float p = (s.dir == 1 ? 0.0 : -dv * (fcount-1));
             float dv = float(longest-1) / (fcount-1);
             float p = 0.0;
             int cnt = s.count;
@@ -70,15 +68,6 @@ namespace
                 p += dv;
             }
         }
-    }
-    size_t count_pixels_in_strip(const Strips *s)
-    {
-        return std::accumulate(s->element,s->element + s->count, 0, [](int v, const Subset& s){return v+s.count;});
-        /* size_t total = 0;
-        for (int i=0; i<s->count; ++i) {
-            total += s->element[i].count;
-        }
-        return total; */
     }
 }
 NeighboursMatrix* NeighboursMatrix::fromStrips(const Strips* strips)
@@ -92,7 +81,7 @@ NeighboursMatrix* NeighboursMatrix::fromStrips(const Strips* strips)
     const uint16_t longest = longestStrip(strips);
     const auto row_size = next_pow2(longest);
     const size_t N = strips->count;
-    const auto total_pixels = count_pixels_in_strip(strips);
+    const auto total_pixels = strips->getTotalPixelsCount();
     uint16_t *indices = new uint16_t[row_size * N];
     initializeIndicesMatrix(strips,indices,row_size);
     float *positions = new float[row_size * N];
