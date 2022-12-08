@@ -76,3 +76,9 @@ void rotRight(int first, int count, int n_rot, T* buffer, T* tmp)
         buffer[i] = tmp[i];
     }
 }
+inline char* int_to_string(char*p,int value,int base=10)
+{
+    itoa(value, p, base);
+    while(*p) p++;
+    return p;
+}

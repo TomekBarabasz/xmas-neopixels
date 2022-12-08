@@ -17,7 +17,14 @@ struct Strips
     static Strips* loadFromBuffer(char*buffer,size_t size);
     uint16_t getTotalPixelsCount() const
     {
-        return std::accumulate(element,element + count, 0, [](int v, const Subset& s){return v+s.count;});
+        uint16_t max_index = 0;
+        for(int i=0;i<count;++i)
+        {
+            auto & s = element[i];
+            auto idx = s.first + s.count;
+            if (idx > max_index) max_index = idx;
+        }
+        return max_index;
     }
     uint16_t count;
     Subset element[];

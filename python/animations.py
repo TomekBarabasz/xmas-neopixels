@@ -1,4 +1,4 @@
-import unittest
+import unittest,random
 from itertools import accumulate
 from bisect import bisect_left
 
@@ -37,16 +37,51 @@ def interpolate(hsv1,hsv2,alpha):
     oma = 255-alpha
     return (c[0]*oma + c[1]*alpha for c in zip(hsv1,hsv2))
  
+def totalPixels(strip):
+    s,c,d = strip[-1]
+    return s+c 
+
+def makeNeighboursFromStrips(strips):
+    # neighbours = [ neighbour ]
+    # neighbour = [ (left|None,up|,right|None,bottom|None) ]
+    Neighbours = {}
+    npxInVStrip = [ s[1] for s in strips ]
+    max_pxInVStrip = max(npxInVStrip)
+    IdxStrips = [ list(range(s,s+c)) if d==1 else list(range(s+c-1,s-1,-1)) for s,c,d in strips ]
+    Dv = [ (max_pxInVStrip-1) / (n_int -1)  for n_int in npxInVStrip ]
+    Pv = [ [dv*n for n in range(len(s))] for s,dv in zip(IdxStrips,Dv) ]
+    
+    for ih in range(len(Pv)):
+        pv = Pv[ih]
+        for iv in range(len(pv)):
+            v = pv[iv]
+            current_idx = IdxStrips[ih][iv]
+            neighbours = []
+            if ih > 0:
+                idx = RandomWalkAnimation.findClosest(Pv[ih-1], v)
+                neighbours.extend( [IdxStrips[ih-1][i] for i in idx] )
+            if iv > 0:
+                neighbours.append(IdxStrips[ih][iv-1])
+            if ih < len(Pv)-1:
+                idx = RandomWalkAnimation.findClosest(Pv[ih+1], v)
+                idxs = IdxStrips[ih+1]
+                ##print('idxs=',idxs,'idx=',idx,'pv=',Pv[ih+1],'v=',v, end=' ')
+                neighbours.extend( [idxs[i] for i in idx] )
+            if iv < len(pv)-1:
+                neighbours.append(IdxStrips[ih][iv+1])
+            Neighbours[current_idx] = neighbours
+    return Neighbours
+
 class RandomWalkAnimation:
     def __init__(self, params, cfg):
         strips = cfg.strips
-        self.totPixels = strips[-1][1] + 1
+        self.totPixels = totalPixels(strips)
         self.pixels = [(0,0,0)] * self.totPixels
         self.brightness = [0] * self.totPixels
         self.dt = 0
         self.fade_dt = 0
         self.params = params
-        self.neighbours = self._makeNeighbours(strips)
+        self.neighbours = makeNeighboursFromStrips(strips)
         self.hue = 0
         self.ipos = random.randrange(0,self.totPixels-1)
         self.pixels[self.ipos] = hsv_to_rgb(self.hue,255,255)
@@ -66,45 +101,6 @@ class RandomWalkAnimation:
                 return [i-1,i] if i > 0 else [i]
         return [N-1]
     
-    def _makeNeighbours(self,strips):
-        # neighbours = [ neighbour ]
-        # neighbour = [ (left|None,up|,right|None,bottom|None) ]
-        Neighbours = {}
-        npxInVStrip = [ s[1]-s[0] for s in strips ]
-        max_pxInVStrip = max(npxInVStrip)
-        IdxStrips = [ list(range(s,e+1)) if d>0 else list(range(e,s-1,-1)) for s,e,d in strips ]
-        Dv = [ n_int / max_pxInVStrip for n_int in npxInVStrip ]
-        Pv = [ [dv*n for n in range(len(s))] for s,dv in zip(IdxStrips,Dv) ]
-        #print('strip indices [by column]')
-        #for col in IdxStrips:
-        #    print(col)
-
-        #print("strip vertical coords [by column]")
-        #for col in Pv:
-        #    print( [round(c,1) for c in col])
-
-        for ih in range(len(Pv)):
-            pv = Pv[ih]
-            for iv in range(len(pv)):
-                v = pv[iv]
-                current_idx = IdxStrips[ih][iv]
-                #print('coords: h=',ih,'iv=',iv, 'v=',v, 'index=',IdxStrips[ih][iv], end=' ')
-                neighbours = []
-                if ih > 0:
-                    idx = RandomWalkAnimation.findClosest(Pv[ih-1], v)
-                    neighbours.extend( [IdxStrips[ih-1][i] for i in idx] )
-                if iv > 0:
-                    neighbours.append(IdxStrips[ih][iv-1])
-                if ih < len(Pv)-1:
-                    idx = RandomWalkAnimation.findClosest(Pv[ih+1], v)
-                    idxs = IdxStrips[ih+1]
-                    ##print('idxs=',idxs,'idx=',idx,'pv=',Pv[ih+1],'v=',v, end=' ')
-                    neighbours.extend( [idxs[i] for i in idx] )
-                if iv < len(pv)-1:
-                    neighbours.append(IdxStrips[ih][iv+1])
-                Neighbours[current_idx] = neighbours
-                #print('idx=',current_idx,'neighbours=',neighbours)
-        return Neighbours
     
     def step(self, dt):
         self.dt += dt
@@ -273,3 +269,27 @@ class VerticalWaveAnimation:
                 hue = hue_inc(hue, self.params.hue_inc)
                 self.lineHue[idx] = hue
         return self.pixels
+
+class GameOfLifeAnimation:
+    def __init__(self, params, cfg):
+        strips = cfg.strips
+        self.totPixels = strips[-1][1] + 1
+        self.pixels = [(0,0,0)] * self.totPixels
+        self.dt = 0
+        self.fade_dt = 0
+        self.params = params
+        self.neighbours = makeNeighboursFromStrips(strips)
+        self.hue = 0
+        self.ipos = random.randrange(0,self.totPixels-1)
+        self.pixels[self.ipos] = hsv_to_rgb(self.hue,255,255)
+        self.brightness[self.ipos] = 255
+        
+    @staticmethod
+    def getParams():
+        return 'delay_ms.H,fade_delay_ms.H,hue_inc:B,fade.B'
+
+    def step(self, dt):
+        self.dt += dt
+        if self.dt * 1000 > self.params.delay_ms:
+            self.dt = 0
+    

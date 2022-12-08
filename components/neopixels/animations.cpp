@@ -2,10 +2,10 @@
 #include <cstdint>
 #include <led_strip.hpp>
 #include <utils.hpp>
+#include <math_utils.h>
 #include <color.hpp>
-
+#include <random.hpp>
 #include <RandomWalkAnimation.hpp>
-#include <Reel100Animation.hpp>
 
 namespace Neopixel
 {
@@ -13,34 +13,39 @@ struct Colortest : public Animation
 {
     LedStrip *strip;
     uint16_t delay_ms;
+    int current_position {0};
+    int current_color {0};
+    
+    static constexpr int n_colors = 3;
+    static constexpr RGB rgb[n_colors] = { {255,0,0}, {0, 255,0}, {0,0,255} };
+
     Colortest(LedStrip *strip_, int datasize, void *data) : strip(strip_)
     {
         delay_ms = decode<uint16_t>(data);
-        ESP_LOGI(TAG, "colortest animation : delay %d", delay_ms);
+        ESP_LOGI("Colortest-app", "colortest animation : delay %d", delay_ms);
+        const auto size = strip->getLength();
+        strip->fillPixelsRGB(0,size,{0,0,0});
+        strip->setPixelsRGB(current_position,1,rgb+current_color);
     }
-    void run() override
+    uint16_t get_delay_ms() override { return delay_ms;}
+    void step() override
     {
         RGB black = {0,0,0};
-        RGB rgb[] = { {255,0,0}, {0, 255,0}, {0,0,255} };
         const auto size = strip->getLength();
 
-        strip->fillPixelsRGB(0,size,{0,0,0});
-        for(;;)
+        if (++current_color >= n_colors)
         {
-            for (int i=0;i<size;++i)
-            {
-                for (int j=0;j<3;++j)
-                {
-                    strip->setPixelsRGB(i,1,rgb+j);
-                    strip->refresh(true);
-                    vTaskDelay(pdMS_TO_TICKS(delay_ms));
-                }
-                strip->setPixelsRGB(i,1,&black);
+            current_color = 0;
+            strip->setPixelsRGB(current_position,1,&black);
+            if (++current_position >= size) {
+                current_position = 0;
             }
         }
+        strip->setPixelsRGB(current_position,1,rgb+current_color);
     }
 };
 
+#if 0
 struct Cylon : Animation
 {
     LedStrip* strip;
@@ -61,6 +66,7 @@ struct Cylon : Animation
 
         ESP_LOGI(TAG, "Cylon animation : snake delay %d background delay %d snake inc %d background inc %d fade %d background hsv %x", delay_snake_ms, delay_bkg_ms, inc_snake, inc_backgroud, fade, background_hsv);
     }
+    uint16_t get_delay_ms() override { return delay_ms;}
     void run() override
     {
         const auto size = strip->getLength();
@@ -118,49 +124,47 @@ struct Cylon : Animation
         }
     }
 };
+#endif
 
 struct Random : Animation
 {
     LedStrip* strip;
     uint16_t delay_new_ms;
     uint16_t delay_fade_ms;
+    uint16_t delay_ms;
     uint8_t fade;
+    int ms_to_new, ms_to_fade;
+    RandomGenerator* random;
 
-    Random(LedStrip *strip_, int datasize, void *data) : strip(strip_)
+    Random(LedStrip *strip_, int datasize, void *data, const Strips*,RandomGenerator*rng) : strip(strip_),random(rng)
     {
         delay_new_ms = decode<uint16_t>(data);
         delay_fade_ms = decode<uint16_t>(data);
         fade = decode<uint8_t>(data);
-        ESP_LOGI(TAG, "Random animation : delay_new_ms %d delay_fade_ms %d fade %d", delay_new_ms, delay_fade_ms, fade);
+        delay_ms = min(delay_new_ms, delay_fade_ms);
+        ESP_LOGI("Random-app", "Random animation : delay_new_ms %d delay_fade_ms %d fade %d", delay_new_ms, delay_fade_ms, fade);
+        ms_to_new = delay_new_ms;
+        ms_to_fade = delay_fade_ms;
     }
-    void run() override
+    uint16_t get_delay_ms() override { return delay_ms; }
+    void step() override
     {
         const auto size = strip->getLength();
-        uint16_t delay = min(delay_new_ms, delay_fade_ms);
-        int delay_new = delay_new_ms, delay_fade = delay_fade_ms;
-        for(;;)
+        ms_to_new -= delay_ms;
+        if (ms_to_new <= 0) 
         {
-            bool doRefresh = false;
-            vTaskDelay(pdMS_TO_TICKS(delay));
-            delay_new -= delay;
-            if (delay_new < 0) {
-                uint32_t rnd = esp_random();
-                HSV hsv = {uint16_t(rnd % 360), 255, 255};
-                strip->fillPixelsRGB((rnd>>8)%size, 1, hsv.toRGB());
-                doRefresh = true;
-                delay_new = delay_new_ms;
-            }
-            delay_fade -= delay;
-            if (delay_fade < 0)
-            {
-                fade_all(strip->getBuffer(), size, fade);
-                doRefresh = true;
-                delay_fade = delay_fade_ms;
-            }
-            if (doRefresh){
-                strip->refresh();
-            }
+            uint32_t rnd = random->make_random();
+            HSV hsv = {uint16_t(rnd % 360), 255, 255};
+            strip->fillPixelsRGB((rnd>>8)%size, 1, hsv.toRGB());
+            ms_to_new = delay_new_ms;
         }
+        ms_to_fade -= delay_ms;
+        if (ms_to_fade <=0)
+        {
+            fade_all(strip->getBuffer(), size, fade);
+            ms_to_fade = delay_fade_ms;
+        }
+        strip->refresh();
     }
 };
 
@@ -181,7 +185,9 @@ struct Fire : Animation
     uint8_t direction;
     uint16_t size;
     uint8_t *heat;
-    Fire(LedStrip *strip_, int datasize, void *data) : strip(strip_)
+    RandomGenerator *random;
+
+    Fire(LedStrip *strip_, int datasize, void *data, const Strips* spatialConfig, RandomGenerator *random) : strip(strip_), random(random)
     {
         delay_ms = decode<uint16_t>(data);
         cooling = decode<uint8_t>(data);
@@ -190,52 +196,50 @@ struct Fire : Animation
 
         size = strip->getLength();
         heat = new uint8_t[size];
-        ESP_LOGI(TAG, "Fire animation : delay %d cooling %d sparking %d direction %d", delay_ms, cooling, sparking, direction);
+        ESP_LOGI("Fire-animation", "Fire animation : delay %d cooling %d sparking %d direction %d", delay_ms, cooling, sparking, direction);
     }
     ~Fire()
     {
         delete[] heat;
     }
-    void run() override
+    uint16_t get_delay_ms() override { return delay_ms; }
+    void step() override
     {
         const uint8_t cooling_factor = (cooling*10) / size + 2;
-        for(;;)
-        {
-            uint32_t rnd = 0;
-            // Step 1.  Cool down every cell
-            for(int i=0;i<size;++i)
-            {
-                if (0==rnd) rnd = esp_random();
-                heat[i] = saturated_sub(heat[i], uint8_t((rnd&0xFF) % cooling_factor));
-                rnd >>= 8;
-            }
-  
-            // Step 2.  Heat from each cell drifts 'up' and diffuses a little
-            for( int k= size - 1; k >= 2; k--) {
-                heat[k] = (heat[k - 1] + heat[k - 2] + heat[k - 2] ) / 3;
-            }
-    
-            // Step 3.  Randomly ignite new 'sparks' of heat near the bottom
-            rnd = esp_random();
-            if( (rnd&0xFF) < sparking ) 
-            {
-                rnd >>= 8;
-                const uint16_t pos = uint16_t(rnd&0xFFFF) % size;
-                rnd >>= 16;
-                const uint8_t const_add = 160;
-                const uint8_t random_add = 255-const_add;
-                heat[pos] = saturated_add( heat[pos], uint8_t(const_add + uint8_t(rnd&0xFF)%random_add));
-            }
 
-            // Step 4.  Map from heat cells to LED colors
-            for( int j = 0; j < size; j++) 
-            {
-                const int pos = (direction==0 ? j : size-1-j);
-                strip->fillPixelsRGB(pos,1,HeatColor( heat[j] ));
-            }
-            strip->refresh();
-            vTaskDelay(pdMS_TO_TICKS(delay_ms));
+        uint32_t rnd = 0;
+        // Step 1.  Cool down every cell
+        for(int i=0;i<size;++i)
+        {
+            if (0==rnd) rnd = random->make_random();
+            heat[i] = saturated_sub(heat[i], uint8_t((rnd&0xFF) % cooling_factor));
+            rnd >>= 8;
         }
+
+        // Step 2.  Heat from each cell drifts 'up' and diffuses a little
+        for( int k= size - 1; k >= 2; k--) {
+            heat[k] = (heat[k - 1] + heat[k - 2] + heat[k - 2] ) / 3;
+        }
+
+        // Step 3.  Randomly ignite new 'sparks' of heat near the bottom
+        rnd = random->make_random();
+        if( (rnd&0xFF) < sparking ) 
+        {
+            rnd >>= 8;
+            const uint16_t pos = uint16_t(rnd&0xFFFF) % size;
+            rnd >>= 16;
+            const uint8_t const_add = 160;
+            const uint8_t random_add = 255-const_add;
+            heat[pos] = saturated_add( heat[pos], uint8_t(const_add + uint8_t(rnd&0xFF)%random_add));
+        }
+
+        // Step 4.  Map from heat cells to LED colors
+        for( int j = 0; j < size; j++) 
+        {
+            const int pos = (direction==0 ? j : size-1-j);
+            strip->fillPixelsRGB(pos,1,HeatColor( heat[j] ));
+        }
+        strip->refresh();
     }
     RGB HeatColor(uint8_t temperature)
     {
@@ -269,46 +273,45 @@ struct Wave : Animation
     uint8_t inc;
     uint8_t direction;
     uint16_t size;
+    int start_hue;
+
     Wave(LedStrip *strip_, int datasize, void *data) : strip(strip_)
     {
         delay_ms  = decode_safe<uint16_t>(data, datasize, 500);
         inc       = decode_safe<uint8_t> (data, datasize, 1);
         direction = decode_safe<uint8_t> (data, datasize, 0);
         size = strip->getLength();
-        ESP_LOGI(TAG, "Wave animation : delay %d inc %d direction %d", delay_ms, inc, direction);
-    }
-    void run() override
-    {
-        int start_hue = rainbow(0, inc);
+        ESP_LOGI("Wave-animation", "Wave animation : delay %d inc %d direction %d", delay_ms, inc, direction);
+        start_hue = rainbow(0, inc);
         if (direction==0) start_hue=0;
-        for(;;)
+    }
+    uint16_t get_delay_ms() override { return delay_ms; }
+    void step() override
+    {
+        auto * buffer = strip->getBuffer();
+        if (direction==0)
         {
-            strip->refresh();
-            vTaskDelay(pdMS_TO_TICKS(delay_ms));
-            auto * buffer = strip->getBuffer();
-            if (direction==0)
-            {
-                //memmove(buffer+1,buffer,sizeof(RGB)*(size-1));
-                for (int j=size-1;j>0;--j) {
-                    buffer[j] = buffer[j-1];
-                }
-                start_hue -= inc;
-                if (start_hue < 0) start_hue += 360;
-                HSV hsv = {uint16_t(start_hue), 255,255};
-                strip->fillPixelsRGB(0,1,hsv.toRGB());
+            //memmove(buffer+1,buffer,sizeof(RGB)*(size-1));
+            for (int j=size-1;j>0;--j) {
+                buffer[j] = buffer[j-1];
             }
-            else
-            {
-                //memmove(buffer,buffer+1,sizeof(RGB)*(size-1));
-                for (int j=0;j<size-1;++j) {
-                    buffer[j] = buffer[j+1];
-                }
-                start_hue += inc;
-                if (start_hue > 360) start_hue -= 360;
-                HSV hsv = {uint16_t(start_hue), 255,255};
-                strip->fillPixelsRGB(size-1,1,hsv.toRGB());
-            }
+            start_hue -= inc;
+            if (start_hue < 0) start_hue += 360;
+            HSV hsv = {uint16_t(start_hue), 255,255};
+            strip->fillPixelsRGB(0,1,hsv.toRGB());
         }
+        else
+        {
+            //memmove(buffer,buffer+1,sizeof(RGB)*(size-1));
+            for (int j=0;j<size-1;++j) {
+                buffer[j] = buffer[j+1];
+            }
+            start_hue += inc;
+            if (start_hue > 360) start_hue -= 360;
+            HSV hsv = {uint16_t(start_hue), 255,255};
+            strip->fillPixelsRGB(size-1,1,hsv.toRGB());
+        }
+        strip->refresh();
     }
     uint16_t rainbow(uint16_t start_hue, uint8_t inc_hue)
     {   
@@ -320,6 +323,8 @@ struct Wave : Animation
         return hsv.h;
     }
 };
+
+#if 0
 
 struct RotatingRings2 : Animation
 {  
@@ -742,25 +747,27 @@ struct HorizontalWave : Animation
     }
 };
 
-Animation* Animation::create(LedStrip*strip,int animation_id, void* data, Strips* strips,RandomGenerator*random)
+#endif
+
+Animation* Animation::create(LedStrip*strip,int animation_id, void* data, const Strips* strips,RandomGenerator*random)
 {
     const uint16_t animation_data_size = decode<uint16_t>(data);
     switch(animation_id)
     {
         default:
         case 0: return new Colortest(strip, animation_data_size, data);
-        case 1: return new Cylon(strip, animation_data_size, data);
-        case 2: return new Reel100(strip, animation_data_size, data);
-        case 3: return new Random(strip, animation_data_size, data);
-        case 4: return new Fire(strip, animation_data_size, data);
+        //case 1: return new Cylon(strip, animation_data_size, data);
+        //case 2: return new Reel100(strip, animation_data_size, data);
+        case 3: return new Random(strip, animation_data_size, data, strips, random);
+        case 4: return new Fire(strip, animation_data_size, data, strips, random);
         case 5: return new Wave(strip, animation_data_size, data);
-        case 6: return new VerticalRings(strip, animation_data_size, data);
-        case 7: return new RotatingRings(strip, animation_data_size, data);
-        case 8: return new RotatingStrips(strip, animation_data_size, data);
-        case 9: return new FallingStars(strip, animation_data_size, data);
-        case 10: return new VerticalWave(strip, animation_data_size, data);
-        case 11: return new HorizontalWave(strip, animation_data_size, data);
-        case 12: return new RandomWalkAnimation(strip, animation_data_size, data, strips,random);
+        //case 6: return new VerticalRings(strip, animation_data_size, data);
+        //case 7: return new RotatingRings(strip, animation_data_size, data);
+        //case 8: return new RotatingStrips(strip, animation_data_size, data);
+        //case 9: return new FallingStars(strip, animation_data_size, data);
+        //case 10: return new VerticalWave(strip, animation_data_size, data);
+        //case 11: return new HorizontalWave(strip, animation_data_size, data);
+        case 12: return new RandomWalkAnimation(strip, animation_data_size, data, strips, random);
     }
 }
 

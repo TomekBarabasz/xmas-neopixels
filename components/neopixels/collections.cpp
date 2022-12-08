@@ -3,6 +3,7 @@
 #include <cstddef>
 #include <utils.hpp>
 #include <numeric>
+#include <cstring>
 
 namespace Neopixel
 {
@@ -14,7 +15,7 @@ Strips* loadFromBuffer(char*buffer,size_t size)
     strips->count = nstrips;
     for (int i=0;i<nstrips;++i)
     {
-        auto s = strips->element[i];
+        auto & s = strips->element[i];
         s.first = *(reinterpret_cast<uint16_t*>(buffer)); buffer += 2;
         s.count = *(reinterpret_cast<uint8_t*>(buffer++));
         s.dir   = *(reinterpret_cast<uint8_t*>(buffer++));
@@ -72,12 +73,6 @@ namespace
 }
 NeighboursMatrix* NeighboursMatrix::fromStrips(const Strips* strips)
 {
-    /*
-    uint16_t count;
-    Neghbours element[];
-        uint16_t count;
-        uint16_t index[];
-    */
     const uint16_t longest = longestStrip(strips);
     const auto row_size = next_pow2(longest);
     const size_t N = strips->count;
@@ -86,12 +81,15 @@ NeighboursMatrix* NeighboursMatrix::fromStrips(const Strips* strips)
     initializeIndicesMatrix(strips,indices,row_size);
     float *positions = new float[row_size * N];
     initializePositionsMatrix(strips,positions,longest,row_size);
-    constexpr size_t MaxNeighboursCnt = 6;
-    auto *matrix = reinterpret_cast<NeighboursMatrix*>( new uint16_t[ 2 + total_pixels * (1 + MaxNeighboursCnt) ] );
+    constexpr uint16_t MaxNeighboursCnt = 6;
+    const size_t n_uint16 = 2 + total_pixels * (1 + MaxNeighboursCnt) ;
+    auto *matrix = reinterpret_cast<NeighboursMatrix*>( new uint16_t[ n_uint16 ] );
+    memset(matrix,0,n_uint16*sizeof(uint16_t));
     matrix->count = total_pixels;
     matrix->elem_size = MaxNeighboursCnt + 1;
     uint16_t * strip_indices   = indices;
     float    * strip_positions = positions;
+
     for (int i=0; i<N; ++i)
     {
         const uint16_t len = strips->element[i].count;

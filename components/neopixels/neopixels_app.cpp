@@ -5,22 +5,16 @@
 #include <esp_log.h>
 #include <neopixel.h>
 #include <neopixel_app.h>
-#include <math_utils.h>
+#include <utils.hpp>
 #include <animation.hpp>
 #include <collections.hpp>
+#include <random.hpp>
 
 using namespace Neopixel;
 uint32_t esp_random(void);
 
-namespace NeopixelApp 
+namespace Neopixel
 {
-ESP_EVENT_DEFINE_BASE(NEOPIXEL_EVENTS);
-TaskHandle_t animationTask = NULL;
-LedStrip *strip = nullptr;
-
-Animation *currentAnimation = nullptr;
-static const char* TAG = "npx-app";
-
 void Animation::main(void*param)
 {
     auto anim = reinterpret_cast<Animation*>(param);
@@ -30,36 +24,52 @@ void Animation::main(void*param)
         vTaskDelay(pdMS_TO_TICKS(anim->get_delay_ms()));
     }
 }
-
-
-
-static constexpr Subset Rings[]
+}
+namespace NeopixelApp 
 {
-    {0, 42, 0},
-    {42,36, 1},
-    {78,37, 0},
-    {115,37, 1},
-    {152,47, 0},
-    {199,15, 1},
-    {214,17, 1},
-    {231,18, 1}
-};
-static constexpr int NumRings = sizeof(Rings)/sizeof(Rings[0]);
+ESP_EVENT_DEFINE_BASE(NEOPIXEL_EVENTS);
+TaskHandle_t animationTask = NULL;
+LedStrip *strip = nullptr;
 
-static constexpr Subset Strips[]
+class EspRandomGenerator : public RandomGenerator
 {
-    {  0,28, 0}, //dir=0 is up
-    { 31,25, 1},
-    { 57,25, 0},
-    { 86,24, 1},
-    {111,25, 0},
-    {138,25, 1},
-    {164,27, 0},
-    {194,20, 1},
-    {215,20, 0},
-    {237,12, 1}
+    uint32_t make_random() override { return esp_random(); }
+    void make_random_n(uint32_t *values, int length) override
+    {
+        while(length-- >0) {
+            *values++ = esp_random();
+        }
+    }
+    void release() override {}
 };
-static constexpr int NumStrips = sizeof(Strips)/sizeof(Strips[0]);
+EspRandomGenerator radomGen;
+Animation *currentAnimation = nullptr;
+static const char* TAG = "npx-app";
+
+static constexpr Strips rings { 8, {
+        {0, 42, 0},
+        {42,36, 1},
+        {78,37, 0},
+        {115,37, 1},
+        {152,47, 0},
+        {199,15, 1},
+        {214,17, 1},
+        {231,18, 1}
+    }
+};
+
+static constexpr Strips strips { 9, {
+        {0,28,1},
+        {30,27,-1},//{from 30,to 56,0},
+        {59,27,1},//{59,85,1},
+        {88,25,-1},//{88,112,0},
+        {115,27,1},//{115,141,1},
+        {144,27,-1},//{144,170,0},
+        {173,27,1},//{173,199,1},
+        {201,22,-1},//{201,222,0},
+        {224,22,1},//{224,245,1}
+    }
+};
 
 esp_event_loop_handle_t create_event_loop()
 {
@@ -109,7 +119,7 @@ static void execute_CmdStartAnimation(LedStrip *strip,void *data)
         delete currentAnimation;
         currentAnimation = nullptr;
     }
-    currentAnimation = create_animation(strip, animation_id, data);
+    currentAnimation = Animation::create(strip,animation_id, data, &strips,&radomGen);
     strip->fillPixelsRGB(0,strip->getLength(),{0,0,0});
     if (currentAnimation)
     {
@@ -138,9 +148,10 @@ static LedStrip* execute_CmdReconfigure(LedStrip *strip,void *data)
 #endif
     return strip;
 }
+#if 0
 static void start_default_animation(esp_event_loop_handle_t loop_handle)
 {
-    uint8_t default_animation_params[9];
+    uint8_t default_animation_params[32];
     void *p = default_animation_params;
     encode<uint8_t>(p, NeopixelApp::CmdStartAnimation);
     encode<uint16_t>(p, 1);
@@ -154,6 +165,25 @@ static void start_default_animation(esp_event_loop_handle_t loop_handle)
     ESP_LOGI(TAG, "neopixel_main : starting default animation, params ptr %p", default_animation_params);
     ESP_ERROR_CHECK(esp_event_post_to(loop_handle, NEOPIXEL_EVENTS, 0, default_animation_params, sizeof(default_animation_params), portMAX_DELAY));
 }
+#else
+static void start_default_animation(esp_event_loop_handle_t loop_handle)
+{
+    uint8_t default_animation_params[32];
+    void *p = default_animation_params;
+    encode<uint8_t>(p, NeopixelApp::CmdStartAnimation);
+    encode<uint16_t>(p,12);
+    encode<uint16_t>(p,11);
+    encode<uint16_t>(p,25);
+    encode<uint16_t>(p,200);
+    encode<uint16_t>(p,0);
+    encode<uint16_t>(p,360);
+    encode<int8_t>(p,1);
+    encode<uint8_t>(p,1);
+    encode<uint8_t>(p,250);
+    ESP_LOGI(TAG, "neopixel_main : starting default animation, params ptr %p", default_animation_params);
+    ESP_ERROR_CHECK(esp_event_post_to(loop_handle, NEOPIXEL_EVENTS, 0, default_animation_params, sizeof(default_animation_params), portMAX_DELAY));
+}
+#endif
 static void neopixel_event_handler(void* handler_args, esp_event_base_t base, int32_t id, void* event_data)
 {
     // Two types of data can be passed in to the event handler: the handler specific data and the event-specific data.
@@ -191,7 +221,7 @@ extern "C" void neopixel_main(void* params)
     LedStripConfig cfg = {1,2,segments};
 #else
     RMTDriverConfig rmt = {GPIO_NUM_16, RMT_CHANNEL_0, 8};
-    LedSegmentConfig segment {250, SegmentType::WS2811, DriverType::RMT, &rmt};
+    LedSegmentConfig segment {247, SegmentType::WS2811, DriverType::RMT, &rmt};
     LedStripConfig cfg = {1,1,&segment};
 #endif
     strip = LedStrip::create(cfg);

@@ -1,9 +1,9 @@
-import pygame,sys,argparse,unittest,json,re,random
+import pygame,sys,argparse,unittest,json,re
 from pathlib import Path
 from types import SimpleNamespace
 from datetime import datetime
 from time import sleep
-from animations import RandomWalkAnimation, RandomWalkAnimation_TestCase
+from animations import RandomWalkAnimation, RandomWalkAnimation_TestCase, HorizontalWaveAnimation
 
 def loadConfigFile(filename):
     with open(filename, "r") as your_file:
@@ -25,16 +25,15 @@ def drawNeopixels(screen,height,colors,config,args):
     psx,psy = config.pixel_spacing_h, config.pixel_spacing_v
     ox = psx
     
-    for ist,iend,dir in config.strips:
-        start,end,step = (iend,ist-1,-1) if dir==1 else (ist,iend+1,1)
-        np = abs(start-end)
+    for ist,np,step in config.strips:
+        start,end,step = (ist,ist+np,1) if step==1 else (ist+np-1,ist-1,-1)
         dy = psy if Args.uniform_spacing else int( (height - np * config.pixel_size) / (np + 1) + 0.5)
         oy = dy
         for ci in range(start,end,step):            
             try:
                 pygame.draw.rect(screen,colors[ci],(ox,oy,psize,psize),0)
             except IndexError:
-                print(f' strip ( {ist},{iend},{dir} )')
+                print(f' strip ( {ist},{np},{step} )')
                 print(f'idx {ci} ox={ox} oy={oy}')
                 raise
             oy = oy + psize + dy
@@ -77,7 +76,7 @@ def main(Args):
     animation = createAnimation(Args.animation, Config)
     if animation is None:
         return
-    longest_strip = max( [s[1]-s[0] for s in Config.strips] ) + 1
+    longest_strip = max( [s[1] for s in Config.strips] ) + 1
     if Args.display is not None:
         width,height = tuple(map(int, Args.display.split(',')))
     else:

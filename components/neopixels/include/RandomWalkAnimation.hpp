@@ -16,11 +16,12 @@ public:
     void step() override;
     uint16_t get_delay_ms() override { return delay_ms; }
 
-    uint16_t getNextHue();
+    int16_t getNextHue(int16_t);
     uint16_t calcNextPosition();
-    void setCurrentPixel(uint16_t idx);
+    void setCurrentPixel(uint16_t idx,uint16_t hue);
 
     LedStrip* strip = {nullptr};
+    const Strips* lines;
     RandomGenerator * rand;
     NeighboursMatrix *neighbours = {nullptr};
     uint16_t delay_ms, fade_delay_ms;
