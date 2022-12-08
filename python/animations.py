@@ -1,6 +1,9 @@
 import unittest,random
-from itertools import accumulate
+from itertools import accumulate,count
 from bisect import bisect_left
+from dataclasses import dataclass
+from utils import loadConfigFile
+from random import randrange
 
 class Base:
     pass
@@ -41,13 +44,16 @@ def totalPixels(strip):
     s,c,d = strip[-1]
     return s+c 
 
+def stripIndices(strips):
+    return [ list(range(s,s+c)) if d==1 else list(range(s+c-1,s-1,-1)) for s,c,d in strips ]
+
 def makeNeighboursFromStrips(strips):
     # neighbours = [ neighbour ]
     # neighbour = [ (left|None,up|,right|None,bottom|None) ]
     Neighbours = {}
     npxInVStrip = [ s[1] for s in strips ]
     max_pxInVStrip = max(npxInVStrip)
-    IdxStrips = [ list(range(s,s+c)) if d==1 else list(range(s+c-1,s-1,-1)) for s,c,d in strips ]
+    IdxStrips = stripIndices(strips)
     Dv = [ (max_pxInVStrip-1) / (n_int -1)  for n_int in npxInVStrip ]
     Pv = [ [dv*n for n in range(len(s))] for s,dv in zip(IdxStrips,Dv) ]
     
@@ -165,7 +171,7 @@ class RandomWalkAnimation_TestCase(unittest.TestCase):
         cfg.strips = [(1,7,1),(8,12,0),(13,17,1)]
         a = RandomWalkAnimation(prms,cfg)
 
-    def test_004(self):
+    def xtest_004(self):
         print('test test_004')
         prms = Base()
         cfg = loadConfigFile('config.json')
@@ -273,7 +279,7 @@ class VerticalWaveAnimation:
 class GameOfLifeAnimation:
     def __init__(self, params, cfg):
         strips = cfg.strips
-        self.totPixels = strips[-1][1] + 1
+        self.totPixels = totalPixels(strips)
         self.pixels = [(0,0,0)] * self.totPixels
         self.dt = 0
         self.fade_dt = 0
@@ -282,7 +288,6 @@ class GameOfLifeAnimation:
         self.hue = 0
         self.ipos = random.randrange(0,self.totPixels-1)
         self.pixels[self.ipos] = hsv_to_rgb(self.hue,255,255)
-        self.brightness[self.ipos] = 255
         
     @staticmethod
     def getParams():
@@ -292,4 +297,118 @@ class GameOfLifeAnimation:
         self.dt += dt
         if self.dt * 1000 > self.params.delay_ms:
             self.dt = 0
+        return self.pixels
+
+def clamp(v,vmin,vmax):
+    return min( max(v,vmin), vmax)
+
+class DigitalRainAnimation:
+    @dataclass
+    class Line:
+        state : int #1 - drawing 0 - waiting        
+        pos : int
+        length : int # tail length
+        delay : int # number of ticks delay before new
     
+    def __init__(self, params, cfg):
+        strips = cfg.strips
+        longestLine = max( [s[1] for s in strips])
+        self.totPixels = totalPixels(strips)
+        self.pixels = [(0,0,0)] * self.totPixels
+        self.dt = 0
+        self.params = params
+        self.hue = params.hue if hasattr(params,'hue') else 120
+        self.head_len = params.head_len if hasattr(params,'head_len') else 3
+        tlmin = params.tail_len_min if hasattr(params,'tail_len_min') else longestLine//3
+        tlmax = params.tail_len_max if hasattr(params,'tail_len_max') else longestLine
+        self.tail_len = (tlmin,tlmax)
+        self.lineIndices = [list(reversed(l)) for l in stripIndices(strips)]
+        self.new_line_delay = (0,longestLine)
+        nLines = len(strips)
+        self.Lines = [DigitalRainAnimation.Line(0,len(self.lineIndices[i])-1, randrange(*self.tail_len), randrange(*self.new_line_delay)) for i in range(nLines)]
+    
+    @staticmethod
+    def getParams():
+        return 'delay_ms.H,hue.H,head_len.B,tail_len_min.B,tail_len_max.B'
+
+    def restartLine(self,idx,line):
+        line.state = 0        
+        line.pos = len(self.lineIndices[idx])-1
+        line.length = randrange(*self.tail_len)
+        line.delay = randrange(*self.new_line_delay)
+
+    def moveLine(self,idx,line):
+        line.pos -= 1
+        
+    def drawLine(self,idx,line):
+        hlen = self.head_len
+        Li = self.lineIndices[idx]
+        N = len(Li)
+        hmin = max(line.pos,0)
+        hmax = clamp(line.pos + hlen,0,N)
+        for i in range(hmin,hmax):
+            self.pixels[ Li[i] ] = (255,255,255)
+        tstart = line.pos + hlen
+        tend = tstart + line.length
+        tmin = clamp(tstart,0,N)
+        tmax = clamp(tend,  0,N)
+        toffset = tmin - tstart
+        if tmax > 0:
+            dv = 255 / line.length
+            Dv = [int(255-dv*i) for i in range(line.length)]
+            for i,j in zip(range(tmin,tmax),count(toffset)):
+                self.pixels[ Li[i] ] = hsv_to_rgb(self.hue, 255, Dv[j])
+            if tmax < N:
+                self.pixels[ Li[tmax] ] = (0,0,0)
+            return True
+        else:
+            return False
+
+    def step(self, dt):
+        self.dt += dt
+        if self.dt * 1000 > self.params.delay_ms:
+            self.dt = 0
+            for line,idx in zip(self.Lines,count(0)):
+                if line.state == 0:
+                    if line.delay == 0:
+                        line.state = 1
+                    else:
+                        line.delay -= 1
+                        #print(f'line {idx} delay {line.delay}')
+                else:
+                    self.moveLine(idx,line)
+                    if not self.drawLine(idx,line):
+                        #print('restarting line',idx)
+                        self.restartLine(idx,line)
+        return self.pixels
+
+class DigitalRainAnimation_TestCase(unittest.TestCase):
+    def xtest_001(self):
+        strips = [[0,28,1],[30,27,-1],[59,27,1],[88,25,-1],[115,27,1],[144,27,-1],[173,27,1],[201,22,-1],[224,22,1]]
+        Lines = stripIndices(strips)
+        Lines = [list(reversed(l)) for l in Lines]
+        for line in Lines:
+            print(line)
+    
+    def xtest_002(self):
+        length = 12
+        dv = 255 / length
+        Dv = [255-dv*i for i in range(length)]
+        print(Dv)
+
+    def test_clamp(self):
+        self.assertEqual( clamp(-1,0,5), 0)
+        self.assertEqual( clamp( 0,0,5), 0)
+        self.assertEqual( clamp( 1,0,5), 1)
+        self.assertEqual( clamp( 5,0,5), 5)
+        self.assertEqual( clamp( 6,0,5), 5)
+
+    def test_draw_head(self):
+        print('test_draw_head')
+        N = 10
+        for pos in range(N,-10,-1):
+            hmin = max(pos,0)
+            hmax = min(max(pos+3,0),N)
+            if hmin==0 and hmax==0:
+                break
+            print( hmin,hmax )

@@ -1,15 +1,9 @@
-import pygame,sys,argparse,unittest,json,re
+import pygame,sys,argparse,unittest,re
 from pathlib import Path
-from types import SimpleNamespace
 from datetime import datetime
 from time import sleep
-from animations import RandomWalkAnimation, RandomWalkAnimation_TestCase, HorizontalWaveAnimation
-
-def loadConfigFile(filename):
-    with open(filename, "r") as your_file:
-        your_dict = json.load(your_file)
-        your_file.seek(0)
-        return json.load(your_file, object_hook= lambda x: SimpleNamespace(**x))
+from animations import RandomWalkAnimation, RandomWalkAnimation_TestCase, HorizontalWaveAnimation, DigitalRainAnimation, DigitalRainAnimation_TestCase
+from utils import loadConfigFile
 
 def got_quit_event(events):
     for event in events:
@@ -65,6 +59,7 @@ def createAnimation(name_and_params,config):
     name,params = parseAnimationParameters(name_and_params)
     Animations = {  'hwave' : HorizontalWaveAnimation,
                     'rwalk' : RandomWalkAnimation,
+                    'drain' : DigitalRainAnimation
     }
     if params is None:
         print("please provide animation parametrers :", Animations[name].getParams())
