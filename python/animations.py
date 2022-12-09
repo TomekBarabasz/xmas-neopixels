@@ -4,48 +4,10 @@ from bisect import bisect_left
 from dataclasses import dataclass
 from utils import loadConfigFile
 from random import randrange
+from utils import *
 
 class Base:
     pass
-
-def hue_inc(h,inc):
-    h += inc
-    if h > 360 : return h-360
-    elif h < 0 : return h+360
-    else : return h
-
-def scale8(rgb, scale):
-    scale_fixed = scale + 1
-    return [ (c * scale_fixed) >> 8 for c in rgb ]
-
-def hsv_to_rgb(h,s,v):
-    h_ = h % 360
-    region = h_ // 60
-    #remainder = (h_ - (region * 60)) * (256/60)
-    remainder = (h_ - (region * 60)) * (256//60)
-
-    p = (v * (255 - s)) >> 8
-    q = (v * (255 - ((s * remainder) >> 8))) >> 8
-    t = (v * (255 - ((s * (255 - remainder)) >> 8))) >> 8
-
-    if region==0:   return (v,t,p)
-    elif region==1: return (q,v,p)
-    elif region==2: return (p,v,t)
-    elif region==3: return (p,q,v)
-    elif region==4: return (t,p,v)
-    else:           return (v,p,q)
-
-def interpolate(hsv1,hsv2,alpha): 
-    #alpha is 0-255
-    oma = 255-alpha
-    return (c[0]*oma + c[1]*alpha for c in zip(hsv1,hsv2))
- 
-def totalPixels(strip):
-    s,c,d = strip[-1]
-    return s+c 
-
-def stripIndices(strips):
-    return [ list(range(s,s+c)) if d==1 else list(range(s+c-1,s-1,-1)) for s,c,d in strips ]
 
 def makeNeighboursFromStrips(strips):
     # neighbours = [ neighbour ]
@@ -299,9 +261,6 @@ class GameOfLifeAnimation:
             self.dt = 0
         return self.pixels
 
-def clamp(v,vmin,vmax):
-    return min( max(v,vmin), vmax)
-
 class DigitalRainAnimation:
     @dataclass
     class Line:
@@ -412,3 +371,34 @@ class DigitalRainAnimation_TestCase(unittest.TestCase):
             if hmin==0 and hmax==0:
                 break
             print( hmin,hmax )
+
+class TextScrollAnimation:
+    @dataclass
+    class Line:
+        state : int #1 - drawing 0 - waiting        
+        pos : int
+        length : int # tail length
+        delay : int # number of ticks delay before new
+    
+    def __init__(self, params, cfg):
+        strips = cfg.strips
+        longestLine = max( [s[1] for s in strips])
+        self.totPixels = totalPixels(strips)
+        self.pixels = [(0,0,0)] * self.totPixels
+        self.dt = 0
+        self.params = params
+  
+    @staticmethod
+    def getParams():
+        return 'delay_ms.H'
+
+    def step(self, dt):
+        self.dt += dt
+        if self.dt * 1000 > self.params.delay_ms:
+            self.dt = 0
+  
+        return self.pixels
+
+class TextScrollAnimation_TestCase(unittest.TestCase):
+    def test_001(self):
+        pass
