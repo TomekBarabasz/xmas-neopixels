@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <cstddef>
 #include <numeric>
+#include <tuple>
 
 namespace Neopixel
 {
@@ -36,6 +37,7 @@ struct Strips
         }
         return max_cnt;
     }
+    std::tuple<uint16_t*,int> makeIndicesMatrix() const;
     uint16_t count;
     Subset element[];
     //consecutive elements placed next

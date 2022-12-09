@@ -135,11 +135,15 @@ uint16_t RandomWalkAnimation::calcNextPosition()
         return ne.index[ rand->make_random() % ne.count ];
     }
 }
+void RandomWalkAnimation::initNeighboursMatrix()
+{
+    neighbours = NeighboursMatrix::fromStrips(lines);
+}
 void RandomWalkAnimation::step()
 {
     if (!neighbours) 
     {
-        neighbours = NeighboursMatrix::fromStrips(lines);
+        initNeighboursMatrix();
     }
     auto np = calcNextPosition();
     current_hue = getNextHue(current_hue);

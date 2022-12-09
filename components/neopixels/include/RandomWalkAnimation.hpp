@@ -16,6 +16,7 @@ public:
     void step() override;
     uint16_t get_delay_ms() override { return delay_ms; }
 
+    void initNeighboursMatrix();
     int16_t getNextHue(int16_t);
     uint16_t calcNextPosition();
     void setCurrentPixel(uint16_t idx,uint16_t hue);

@@ -85,3 +85,14 @@ inline char* int_to_string(char*p,int value,int base=10)
     while(*p) p++;
     return p;
 }
+template<typename T>
+T clamp(T v, T vmin, T vmax)
+{
+    if (v > vmin)
+    {
+        return v <= vmax ? v : vmax;
+    }
+    else return vmin;
+}
+template<typename T>
+T max(T a, T b) { return a >= b ? a : b;}

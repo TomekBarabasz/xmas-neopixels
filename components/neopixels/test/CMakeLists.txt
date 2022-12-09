@@ -24,9 +24,11 @@ add_library(animations SHARED
 target_compile_options(animations PUBLIC
     -O0 -g
     -DUNIT_TEST
+    #"-fsanitize=address"
 )
 target_link_options(animations PUBLIC
     "-Wl,--no-undefined"
+    #"-fsanitize=address"
 )
 target_link_libraries(animations
     stdc++
@@ -38,6 +40,10 @@ add_executable(neopixels_ut
 )
 target_compile_options(neopixels_ut PUBLIC
     -O0 -g
+    #"-fsanitize=address"
+)
+target_link_options(neopixels_ut PUBLIC
+    #"-fsanitize=address"
 )
 target_link_libraries(neopixels_ut
     animations

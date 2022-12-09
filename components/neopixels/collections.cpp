@@ -39,19 +39,7 @@ namespace
     }
     void initializeIndicesMatrix(const Strips* strips, uint16_t *indices, uint16_t row_size)
     {
-        for (int i=0;i<strips->count;++i)
-        {
-            auto & s = strips->element[i];
-            auto cnt = s.count;
-            uint16_t idx = s.first;
-            if (s.dir < 0) idx += s.count - 1;
-            int pi = i * row_size;
-            while (cnt-- >0 )
-            {
-                indices[pi++] = idx;
-                idx += s.dir;
-            }
-        }
+        
     }
     void initializePositionsMatrix(const Strips* strips, float* positions, uint16_t longest, uint16_t row_size)
     {
@@ -71,13 +59,34 @@ namespace
         }
     }
 }
+std::tuple<uint16_t*,int> Strips::makeIndicesMatrix() const
+{
+    const uint16_t longest = getLongestLine();
+    const auto row_size = next_pow2(longest);
+    auto * indices = new uint16_t[count * row_size];
+
+    for (int i=0;i<count;++i)
+    {
+        auto & s = element[i];
+        auto cnt = s.count;
+        uint16_t idx = s.first;
+        if (s.dir < 0) idx += s.count - 1;
+        int pi = i * row_size;
+        while (cnt-- >0 )
+        {
+            indices[pi++] = idx;
+            idx += s.dir;
+        }
+    }
+
+    return {indices,row_size};
+}
 NeighboursMatrix* NeighboursMatrix::fromStrips(const Strips* strips)
 {
-    const uint16_t longest = longestStrip(strips);
-    const auto row_size = next_pow2(longest);
+    const uint16_t longest = strips->getLongestLine();
     const size_t N = strips->count;
     const auto total_pixels = strips->getTotalPixelsCount();
-    uint16_t *indices = new uint16_t[row_size * N];
+    auto [indices,row_size] = strips->makeIndicesMatrix();
     initializeIndicesMatrix(strips,indices,row_size);
     float *positions = new float[row_size * N];
     initializePositionsMatrix(strips,positions,longest,row_size);

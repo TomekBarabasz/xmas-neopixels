@@ -76,6 +76,7 @@ RandomWalkAnimation* makeAnimation(Subset (&su)[N], const ParamsMap& prms, MockL
     EXPECT_CALL(random, make_random()).Times(1).WillOnce(Return(0));
     auto [params,len] = encodeParams(prms);
     auto *pa = new RandomWalkAnimation(&led_strip,len,params,pstrips,&random);
+    pa->initNeighboursMatrix(); //to generate neighbours matrix
     release(pstrips);
     return pa;
 }

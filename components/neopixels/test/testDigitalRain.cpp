@@ -8,24 +8,13 @@
 #include <utils.hpp>
 #include <string>
 #include <map>
+#include <vector>
+#include <color.hpp>
 
 using namespace Neopixel;
 using namespace ::testing;
 using ::testing::Return;
 using ParamsMap = std::map<std::string,int>;
-
-struct MockLedStrip : public LedStrip 
-{
-    MOCK_METHOD( int,  getLength,    (), (const));
-    MOCK_METHOD( RGB*, getBuffer,    ());
-    MOCK_METHOD( void, setPixelsRGB, (int first, int num, const RGB*));
-    MOCK_METHOD( void, fillPixelsRGB,(int first, int num, const RGB&));
-    MOCK_METHOD( void, setPixelsHSV, (int first, int num, const HSV*));
-    MOCK_METHOD( void, refresh,      (bool wait));
-    MOCK_METHOD( void, copyFrontToBack,());
-    MOCK_METHOD( bool, waitReady,    (uint32_t timeout_ms));
-    MOCK_METHOD( void, release,      ());
-};
 
 struct MockRandomGenerator : public RandomGenerator
 {
@@ -54,25 +43,147 @@ std::tuple<uint8_t*,int> encodeParams(const ParamsMap& prms)
 
     return {params, (uint8_t*)p-params};
 }
-
-template <size_t N>
-DigitalRainAnimation* makeAnimation(Subset (&su)[N], const ParamsMap& prms, MockLedStrip& led_strip, MockRandomGenerator& random)
+DigitalRainAnimation* makeAnimation(const Strips* pstrips, const ParamsMap& prms, LedStrip* led_strip, MockRandomGenerator& random)
 {
-    Strips *pstrips = makeStrips(su);
-    EXPECT_CALL(random, make_random()).Times(1).WillOnce(Return(0));
+    EXPECT_CALL(random, make_random()).Times(2*pstrips->count).WillRepeatedly(Return(0));
     auto [params,len] = encodeParams(prms);
-    auto *pa = new DigitalRainAnimation(&led_strip,len,params,pstrips,&random);
-    release(pstrips);
+    auto *pa = new DigitalRainAnimation(led_strip,len,params,pstrips,&random);
+
     return pa;
 }
+struct MockLedStrip : public LedStrip 
+{
+    struct SetRGB
+    {
+        int first, num;
+        RGB color;
+    };
+    struct SetHSV
+    {
+        int first, num;
+        HSV color;
+    };
+    std::vector<SetRGB> rgb_calls;
+    std::vector<SetHSV> hsv_calls;
+    MOCK_METHOD( int,  getLength,    (), (const));
+    MOCK_METHOD( RGB*, getBuffer,    ());
+    MOCK_METHOD( void, fillPixelsRGB,(int first, int num, const RGB&));
+    void setPixelsRGB(int first, int num, const RGB* color) override
+    {
+        rgb_calls.push_back( {first,num, *color});
+    }
+    void setPixelsHSV(int first, int num, const HSV* color) override
+    {
+        hsv_calls.push_back( {first,num, *color});
+    }
+    MOCK_METHOD( void, refresh,      (bool wait));
+    MOCK_METHOD( void, copyFrontToBack,());
+    MOCK_METHOD( bool, waitReady,    (uint32_t timeout_ms));
+    MOCK_METHOD( void, release,      ());
+};
 }
 TEST(DigitalRain, create)
 {
-    Subset su[] = {{0,3,1},{3,3,-1},{6,3,1}};
+    Subset su[] = {{0,10,1},{15,10,-1},{30,10,1}};
+    Strips *pstrips = makeStrips(su);
     MockLedStrip led_strip;
     MockRandomGenerator random;
     
-    auto *anim = makeAnimation(su,{},led_strip,random);
+    auto *anim = makeAnimation(pstrips,{},&led_strip,random);
+    auto & strips = *(anim->pixelLines);
+
+    EXPECT_EQ(anim->rain_lines[0].state, 0);
+    EXPECT_EQ(anim->rain_lines[1].state, 0);
+    EXPECT_EQ(anim->rain_lines[2].state, 0);
+    EXPECT_EQ(anim->rain_lines[0].position, strips.element[0].count-1);
+    EXPECT_EQ(anim->rain_lines[1].position, strips.element[1].count-1);
+    EXPECT_EQ(anim->rain_lines[2].position, strips.element[2].count-1);
+
     delete anim;
+    release(pstrips);
 }
 
+bool operator==(const RGB&a, const RGB&b)
+{
+    return a.r==b.r && a.g==b.g && a.b==b.b;
+}
+TEST(DigitalRain, test_drawLine)
+{
+    Subset su[] = {{0,10,1},{15,10,-1},{30,10,1}};
+    Strips *pstrips = makeStrips(su);
+    MockLedStrip led_strip;
+    MockRandomGenerator random;
+    
+    auto *anim = makeAnimation(pstrips,{},&led_strip,random);
+    anim->head_length = 3;
+
+    const auto l1_indices = anim->line_indices;
+    const auto l2_indices = anim->line_indices + anim->indices_row_size;
+    const auto l3_indices = anim->line_indices + anim->indices_row_size * 2;
+    const auto l1_size = pstrips->element[0].count;
+
+    RGB white {255,255,255};
+
+    #if 0
+    line.length = 5;
+    bool result = anim->drawLine(0);
+    EXPECT_TRUE(result);
+    EXPECT_EQ(led_strip.rgb_calls.size(),1);
+    EXPECT_EQ(led_strip.hsv_calls.size(),0);
+    EXPECT_EQ(led_strip.rgb_calls[0].first,l1_indices[ l1_size-1 ]);
+    EXPECT_EQ(led_strip.rgb_calls[0].num,1);
+    EXPECT_TRUE(led_strip.rgb_calls[0].color == white);
+    led_strip.rgb_calls.clear();
+
+    result = anim->drawLine(0);
+    EXPECT_TRUE(result);
+    EXPECT_EQ(led_strip.rgb_calls.size(),1);
+    EXPECT_EQ(led_strip.hsv_calls.size(),0);
+    EXPECT_EQ(led_strip.rgb_calls[0].first,l1_indices[ l1_size-2 ]);
+    EXPECT_EQ(led_strip.rgb_calls[0].num,2);
+    EXPECT_TRUE(led_strip.rgb_calls[0].color == white);
+    led_strip.rgb_calls.clear();
+
+    result = anim->drawLine(0);
+    EXPECT_TRUE(result);
+    EXPECT_EQ(led_strip.rgb_calls.size(),1);
+    EXPECT_EQ(led_strip.hsv_calls.size(),0);
+    EXPECT_EQ(led_strip.rgb_calls[0].first,l1_indices[ l1_size-3 ]);
+    EXPECT_EQ(led_strip.rgb_calls[0].num,3);
+    EXPECT_TRUE(led_strip.rgb_calls[0].color == white);
+    led_strip.rgb_calls.clear();
+    #endif
+    int line_idx = 1;
+
+    auto & line = anim->rain_lines[line_idx];
+    line.length = 5;
+
+    std::cout << "test draw line " << line_idx << std::endl;
+    bool result;
+    do
+    {
+        std::cout << "\nposition " << (int)line.position << std::endl;
+        result = anim->drawLine(line_idx);
+        if(led_strip.hsv_calls.size())
+        {
+            std::cout << "hsv calls" << std::endl;
+            for (auto & call : led_strip.hsv_calls) {
+                std::cout << "first " << call.first << " num " << call.num << " color " << (int)call.color.h << ' ' << (int)call.color.s << ' ' << (int)call.color.v << std::endl;
+            }
+        }
+        if (led_strip.rgb_calls.size())
+        {
+            std::cout << "rgb calls" << std::endl;
+            for (auto & call : led_strip.rgb_calls) {
+                std::cout << "first " << call.first << " num " << call.num << " color " << (int)call.color.r << ' ' << (int)call.color.g << ' ' << (int)call.color.b << std::endl;
+            }
+        }
+        anim->moveLine(line_idx);
+        led_strip.rgb_calls.clear();
+        led_strip.hsv_calls.clear();
+    } while (result);
+    
+    
+    delete anim;
+    release(pstrips);
+}
