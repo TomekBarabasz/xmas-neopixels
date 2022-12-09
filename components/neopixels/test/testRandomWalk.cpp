@@ -33,7 +33,8 @@ struct MockRandomGenerator : public RandomGenerator
     MOCK_METHOD( void,     make_random_n, (uint32_t *values, int length));
     MOCK_METHOD( void,     release, ());
 };
-
+namespace
+{
 std::tuple<uint8_t*,int> encodeParams(uint16_t delay_ms,uint16_t fade_delay_ms,uint16_t hue_min,uint16_t hue_max, int8_t hue_inc,uint8_t hue_wrap, uint8_t hue_fade)
 {
     static uint8_t params[12];
@@ -68,7 +69,6 @@ std::tuple<uint8_t*,int> encodeParams(const ParamsMap& prms)
 
     return {params, (uint8_t*)p-params};
 }
-
 template <size_t N>
 RandomWalkAnimation* makeAnimation(Subset (&su)[N], const ParamsMap& prms, MockLedStrip& led_strip, MockRandomGenerator& random)
 {
@@ -78,6 +78,7 @@ RandomWalkAnimation* makeAnimation(Subset (&su)[N], const ParamsMap& prms, MockL
     auto *pa = new RandomWalkAnimation(&led_strip,len,params,pstrips,&random);
     release(pstrips);
     return pa;
+}
 }
 TEST(RandomWalk, getNewHue_nowrap)
 {
@@ -91,27 +92,24 @@ TEST(RandomWalk, getNewHue_nowrap)
     anim->hue_max = 100;
     anim->hue_wrap = 0;
 
-    anim->current_hue = 95;
     anim->hue_inc = 5;    
-    auto next_hue = anim->getNextHue();
+    auto next_hue = anim->getNextHue(95);
     EXPECT_EQ(next_hue,100);
     
-    next_hue = anim->getNextHue();
+    next_hue = anim->getNextHue(100);
     EXPECT_EQ(next_hue,100);
     EXPECT_EQ(anim->hue_inc,-5);
 
-    anim->current_hue = 15;
     anim->hue_inc = -5;
-    next_hue = anim->getNextHue();
+    next_hue = anim->getNextHue(15);
     EXPECT_EQ(next_hue,10);
 
-    next_hue = anim->getNextHue();
+    next_hue = anim->getNextHue(10);
     EXPECT_EQ(next_hue,10);
     EXPECT_EQ(anim->hue_inc,5);
 
     delete anim;
 }
-
 TEST(RandomWalk, getNewHue_wrap)
 {
     Subset su[] = {{0,3,1},{3,3,-1},{6,3,1}};
@@ -124,21 +122,19 @@ TEST(RandomWalk, getNewHue_wrap)
     anim->hue_max = 100;
     anim->hue_wrap = 1;
 
-    anim->current_hue = 95;
     anim->hue_inc = 5;
-    auto next_hue = anim->getNextHue();
+    auto next_hue = anim->getNextHue(95);
     EXPECT_EQ(next_hue,100);
 
-    next_hue = anim->getNextHue();
+    next_hue = anim->getNextHue(100);
     EXPECT_EQ(next_hue,10);
     EXPECT_EQ(anim->hue_inc,5);
 
     anim->hue_inc = -5;
-    anim->current_hue = 15;
-    next_hue = anim->getNextHue();
+    next_hue = anim->getNextHue(15);
     EXPECT_EQ(next_hue,10);
 
-    next_hue = anim->getNextHue();
+    next_hue = anim->getNextHue(10);
     EXPECT_EQ(next_hue,100);
     EXPECT_EQ(anim->hue_inc,-5);
 

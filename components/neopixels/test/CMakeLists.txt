@@ -16,28 +16,31 @@ target_link_libraries(libut_gtest
     ${GTEST_LIBRARIES} 
     ${GMOCK_LIBRARIES}
 )
-add_library(random-walk-animation SHARED 
+add_library(animations SHARED 
     ../RandomWalkAnimation.cpp
+    ../DigitalRainAnimation.cpp
     ../collections.cpp
 )
-target_compile_options(random-walk-animation PUBLIC
+target_compile_options(animations PUBLIC
     -O0 -g
+    -DUNIT_TEST
 )
-target_link_options(random-walk-animation PUBLIC
+target_link_options(animations PUBLIC
     "-Wl,--no-undefined"
 )
-target_link_libraries(random-walk-animation
+target_link_libraries(animations
     stdc++
 )
 add_executable(neopixels_ut 
     testRandomWalk.cpp
     testCollections.cpp
+    testDigitalRain.cpp
 )
 target_compile_options(neopixels_ut PUBLIC
     -O0 -g
 )
 target_link_libraries(neopixels_ut
-    random-walk-animation
+    animations
     libut_gtest
     pthread
     stdc++

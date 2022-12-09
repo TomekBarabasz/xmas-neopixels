@@ -76,6 +76,9 @@ void rotRight(int first, int count, int n_rot, T* buffer, T* tmp)
         buffer[i] = tmp[i];
     }
 }
+#ifdef UNIT_TEST
+inline void itoa(int value, char*p, int base=10) {}
+#endif
 inline char* int_to_string(char*p,int value,int base=10)
 {
     itoa(value, p, base);

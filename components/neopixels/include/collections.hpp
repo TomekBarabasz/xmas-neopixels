@@ -26,6 +26,16 @@ struct Strips
         }
         return max_index;
     }
+    uint16_t getLongestLine() const
+    {
+        uint16_t max_cnt = 0;
+        for(int i=0;i<count;++i)
+        {
+            auto & s = element[i];
+            if (s.count > max_cnt) max_cnt = s.count;
+        }
+        return max_cnt;
+    }
     uint16_t count;
     Subset element[];
     //consecutive elements placed next

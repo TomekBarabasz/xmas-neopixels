@@ -4,7 +4,11 @@
 #include <collections.hpp>
 #include <utils.hpp>
 #include <random.hpp>
-#include <esp_log.h>
+#ifndef UNIT_TEST
+ #include <esp_log.h>
+#else
+ #define ESP_LOGI(tag,format,...)
+#endif
 #include <RandomWalkAnimation.hpp>
 
 namespace Neopixel
