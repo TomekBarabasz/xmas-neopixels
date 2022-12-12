@@ -36,7 +36,10 @@ std::tuple<uint8_t*,int> encodeParams(const ParamsMap& prms)
     static uint8_t params[12];
     void *p = params;
     encode_prm<uint16_t>("delay_ms",prms,p,20);
-    encode_prm<uint16_t>("hue",prms,p,120);
+    encode_prm<uint16_t>("hue_min",prms,p,120);
+    encode_prm<uint16_t>("hue_max",prms,p,120);
+    encode_prm<int8_t>("hue_inc",prms,p,0);
+    encode_prm<uint8_t>("hue_mode",prms,p,0);
     encode_prm<uint16_t>("head_length",prms,p,3);
     encode_prm<uint16_t>("tail_length_min",prms,p,10);
     encode_prm<int8_t>("tail_length_max",prms,p,30);
@@ -67,11 +70,12 @@ struct MockLedStrip : public LedStrip
     std::vector<SetHSV> hsv_calls;
     MOCK_METHOD( int,  getLength,    (), (const));
     MOCK_METHOD( RGB*, getBuffer,    ());
-    MOCK_METHOD( void, fillPixelsRGB,(int first, int num, const RGB&));
-    void setPixelsRGB(int first, int num, const RGB* color) override
+    void fillPixelsRGB(int first, int num, const RGB& color) override
     {
-        rgb_calls.push_back( {first,num, *color});
+        rgb_calls.push_back( {first,num, color});
     }
+    MOCK_METHOD( void, setPixelsRGB, (int first, int num, const RGB* color));
+    
     void setPixelsHSV(int first, int num, const HSV* color) override
     {
         hsv_calls.push_back( {first,num, *color});
@@ -114,7 +118,7 @@ TEST(DigitalRain, test_drawLine)
     MockLedStrip led_strip;
     MockRandomGenerator random;
     
-    auto *anim = makeAnimation(pstrips,{},&led_strip,random);
+    auto *anim = makeAnimation(pstrips,{{"hue_min",120}},&led_strip,random);
     anim->head_length = 3;
 
     const auto l1_indices = anim->line_indices;
@@ -153,35 +157,40 @@ TEST(DigitalRain, test_drawLine)
     EXPECT_TRUE(led_strip.rgb_calls[0].color == white);
     led_strip.rgb_calls.clear();
     #endif
-    int line_idx = 1;
 
-    auto & line = anim->rain_lines[line_idx];
-    line.length = 5;
-
-    std::cout << "test draw line " << line_idx << std::endl;
-    bool result;
-    do
+    anim->color_value = 200;
+    anim->hue_min = 120;
+    anim->hue_mode = 0;
+    for (int line_idx = 0;line_idx<3;++line_idx)
     {
-        std::cout << "\nposition " << (int)line.position << std::endl;
-        result = anim->drawLine(line_idx);
-        if(led_strip.hsv_calls.size())
+        auto & line = anim->rain_lines[line_idx];
+        line.length = 5;
+
+        std::cout << "test draw line " << line_idx << std::endl;
+        bool result;
+        do
         {
-            std::cout << "hsv calls" << std::endl;
-            for (auto & call : led_strip.hsv_calls) {
-                std::cout << "first " << call.first << " num " << call.num << " color " << (int)call.color.h << ' ' << (int)call.color.s << ' ' << (int)call.color.v << std::endl;
+            std::cout << "\nposition " << (int)line.position << std::endl;
+            result = anim->drawLine(line_idx);
+            if(led_strip.hsv_calls.size())
+            {
+                std::cout << "hsv calls" << std::endl;
+                for (auto & call : led_strip.hsv_calls) {
+                    std::cout << "first " << call.first << " num " << call.num << " color " << (int)call.color.h << ' ' << (int)call.color.s << ' ' << (int)call.color.v << std::endl;
+                }
             }
-        }
-        if (led_strip.rgb_calls.size())
-        {
-            std::cout << "rgb calls" << std::endl;
-            for (auto & call : led_strip.rgb_calls) {
-                std::cout << "first " << call.first << " num " << call.num << " color " << (int)call.color.r << ' ' << (int)call.color.g << ' ' << (int)call.color.b << std::endl;
+            if (led_strip.rgb_calls.size())
+            {
+                std::cout << "rgb calls" << std::endl;
+                for (auto & call : led_strip.rgb_calls) {
+                    std::cout << "first " << call.first << " num " << call.num << " color " << (int)call.color.r << ' ' << (int)call.color.g << ' ' << (int)call.color.b << std::endl;
+                }
             }
-        }
-        anim->moveLine(line_idx);
-        led_strip.rgb_calls.clear();
-        led_strip.hsv_calls.clear();
-    } while (result);
+            anim->moveLine(line_idx);
+            led_strip.rgb_calls.clear();
+            led_strip.hsv_calls.clear();
+        } while (result);
+    }
     
     
     delete anim;

@@ -17,7 +17,11 @@ DigitalRainAnimation::DigitalRainAnimation(LedStrip *strip, int datasize, void *
     strip(strip),pixelLines(lines),rand(rand)
 {
     delay_ms    = decode_safe<uint16_t>(data,datasize,20);
-    hue         = decode_safe<uint16_t>(data,datasize,120);
+    hue_min     = decode_safe<uint16_t>(data,datasize,0);
+    hue_max     = decode_safe<uint16_t>(data,datasize,360);
+    hue_inc     = decode_safe<int8_t>(data,datasize,0);
+    hue_mode    = decode_safe<uint8_t>(data,datasize,0);
+    color_value = decode_safe<int16_t>(data,datasize,255);
     head_length = decode_safe<int8_t>(data,datasize,3);
     longest_line = pixelLines->getLongestLine();
     tail_length_min = decode_safe<uint8_t>(data,datasize,longest_line/3);
@@ -29,6 +33,7 @@ DigitalRainAnimation::DigitalRainAnimation(LedStrip *strip, int datasize, void *
     auto [ptr,rsize]  = pixelLines->makeIndicesMatrix();
     line_indices = ptr;
     indices_row_size = rsize;
+    hue = hue_min;
     createRainLines();
 }
 DigitalRainAnimation::~DigitalRainAnimation()
@@ -64,6 +69,7 @@ void DigitalRainAnimation::restartLine(int idx)
     line.position = pos;
     line.length = tail_length;
     line.delay = delay;
+    line.hue = hue = getNextHue(hue);
 }
 bool DigitalRainAnimation::drawLine(int idx)
 {
@@ -71,12 +77,12 @@ bool DigitalRainAnimation::drawLine(int idx)
     const auto *li = line_indices + idx*indices_row_size;
     auto & line = rain_lines[idx];
     const int8_t line_size = pixelLines->element[idx].count;
-    RGB white {255,255,255};
+    RGB white {255,255,color_value};
     const int8_t hmin = max(line.position,zero);
     const int8_t hmax = clamp(static_cast<int8_t>(line.position + head_length),zero,line_size);
     const auto cnt_white = hmax-hmin;
     if (cnt_white > 0) {
-        strip->setPixelsRGB(li[hmin],cnt_white,&white);
+        strip->fillPixelsRGB(li[hmin],cnt_white,white);
     }
     /*for (int i=hmin;i<hmax;++i) {
         strip->setPixelsRGB(li[i],1,&white);
@@ -87,24 +93,60 @@ bool DigitalRainAnimation::drawLine(int idx)
     const int8_t tmax = clamp(tend,  zero,line_size);
 
     int8_t toffset = tmin - tstart;
+    bool result = false;
     if (tmax > 0)
     {
-        uint16_t dv = 255 / line_size;
-        HSV tail_color {hue, 255, static_cast<uint8_t>(255 - dv*toffset)};
+        uint16_t dv = color_value / line.length;
+        HSV tail_color {hue, 255, static_cast<uint8_t>(color_value - dv*toffset)};
         for(int i=tmin;i<tmax;++i,++toffset)
         {
             strip->setPixelsHSV(li[i],1,&tail_color);
             tail_color.v -= dv;
         }
-        if (tmax < line_size) {
-            RGB black {0,0,0};
-            strip->setPixelsRGB(li[tmax],1,&black);
-        }
-        return true;
+        result = true;
     }
-    return false;
+    if (tmax >=0 && tmax < line_size) {
+        RGB black {0,0,0};
+        strip->fillPixelsRGB(li[tmax],1,black);
+    }
+    return result;
 }
-
+int16_t DigitalRainAnimation::getNextHue(int16_t hue)
+{
+    if (hue_mode != 2)
+    {
+        hue += hue_inc;
+        if (hue < hue_min)
+        {
+            if (1==hue_mode)
+            {
+                hue = hue_max;
+            }
+            else
+            {
+                hue = hue_min;
+                hue_inc = -hue_inc;
+            }
+        }
+        else if (hue > hue_max)
+        {
+            if (1==hue_mode)
+            {
+                hue = hue_min;
+            }
+            else
+            {
+                hue = hue_max;
+                hue_inc = -hue_inc;
+            }
+        }
+    }
+    else
+    {
+        hue = hue_min + rand->make_random() % (hue_max-hue_min);
+    }
+    return hue;
+}
 void DigitalRainAnimation::step()
 {
     //auto *p = strip->getBuffer();
