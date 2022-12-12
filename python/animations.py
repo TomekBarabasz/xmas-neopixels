@@ -3,7 +3,7 @@ from itertools import accumulate,count
 from bisect import bisect_left
 from dataclasses import dataclass
 from utils import loadConfigFile
-from random import randrange
+from random import randrange,sample
 from utils import *
 
 class Base:
@@ -241,24 +241,70 @@ class VerticalWaveAnimation:
 class GameOfLifeAnimation:
     def __init__(self, params, cfg):
         strips = cfg.strips
-        self.totPixels = totalPixels(strips)
-        self.pixels = [(0,0,0)] * self.totPixels
+        self.totalPixels = totalPixels(strips)
+        self.pixels = [(0,0,0)] * self.totalPixels
         self.dt = 0
         self.fade_dt = 0
         self.params = params
         self.neighbours = makeNeighboursFromStrips(strips)
         self.hue = 0
-        self.ipos = random.randrange(0,self.totPixels-1)
-        self.pixels[self.ipos] = hsv_to_rgb(self.hue,255,255)
+        self.occupied_cells = [0] * self.totalPixels
+        self.restart()
         
     @staticmethod
     def getParams():
-        return 'delay_ms.H,fade_delay_ms.H,hue_inc:B,fade.B'
+        return 'delay_ms.H,hue:B,hue_inc:B,num_init_cells.H,size_init_cell.B'
+    
+    def restart(self):
+        print("restarting")
+        num_init_cells = self.params.num_init_cells
+        num_iters = 0
+        while(num_init_cells > 0 and num_iters < 3*self.params.num_init_cells):
+            while True:
+                ipos = random.randrange(0,self.totalPixels-1)
+                if ipos not in self.neighbours: continue
+                Ne = self.neighbours[ipos]
+                break
+            occ = [ self.occupied_cells[n] for n in Ne]
+            self.pixels[ipos] = hsv_to_rgb(self.hue,255,255)
+            if sum(occ) == 0:
+                self.occupied_cells[ipos]=1
+                ne = sample(Ne,k=self.params.size_init_cell) if self.params.size_init_cell < len(Ne) else Ne
+                for n in ne:
+                    self.occupied_cells[n] = 1
+                    self.pixels[n] = hsv_to_rgb(self.hue,255,255)
+                num_init_cells -= 1
+            num_iters += 1            
 
     def step(self, dt):
         self.dt += dt
         if self.dt * 1000 > self.params.delay_ms:
             self.dt = 0
+            num_alive_cells = 0
+            new_occ = [0]*self.totalPixels
+            for i,Ne in self.neighbours.items():
+                occ_ne = [self.occupied_cells[n] for n in Ne]
+                n_occ_ne = sum(occ_ne)
+                if self.occupied_cells[i] == 0:
+                    if n_occ_ne == 3:
+                        new_occ[i] = 1
+                        self.pixels[i] = hsv_to_rgb(self.hue,255,255)
+                        num_alive_cells += 1
+                        #print('age',self.occupied_cells[i],'hue',self.hue)
+                else:
+                    if n_occ_ne >=2 and n_occ_ne <=3:
+                        new_occ[i] = self.occupied_cells[i] + 1
+                        hue = self.hue + new_occ[i] * self.params.hue_inc
+                        self.pixels[i] = hsv_to_rgb(hue,255,255)
+                        num_alive_cells += 1
+                        #print('age',self.occupied_cells[i],'hue',hue)
+                    else:
+                        new_occ[i] = 0
+                        self.pixels[i] = (0,0,0)
+            self.occupied_cells = new_occ
+            if num_alive_cells == 0:
+                self.restart()
+            
         return self.pixels
 
 class DigitalRainAnimation:
@@ -402,3 +448,22 @@ class TextScrollAnimation:
 class TextScrollAnimation_TestCase(unittest.TestCase):
     def test_001(self):
         pass
+
+class PlasmaAnimation:
+    def __init__(self, params, cfg):
+        strips = cfg.strips
+        self.totalPixels = totalPixels(strips)
+        self.pixels = [(0,0,0)] * self.totalPixels
+        self.dt = 0
+        self.params = params
+        self.neighbours = makeNeighboursFromStrips(strips)
+        self.blobs = [(origin,size,mv,hsv)]
+
+    def sinus(self,origin,size,mv,hsv):
+        pass
+    
+    def step(self, dt):
+        self.dt += dt
+        if self.dt * 1000 > self.params.delay_ms:
+            self.dt = 0
+        return self.pixels

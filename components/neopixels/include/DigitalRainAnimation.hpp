@@ -40,7 +40,7 @@ public:
     uint8_t hue_mode; //0=nowrap,1==wrap,2==random
     uint8_t color_value;
     int8_t head_length;
-    uint8_t tail_length_min, tail_length_max, tail_length_range;
+    uint8_t head_value, tail_length_min, tail_length_max, tail_length_range;
     Line *rain_lines {nullptr};
     uint16_t *line_indices {nullptr};
     uint16_t indices_row_size {};
