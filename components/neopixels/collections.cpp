@@ -26,21 +26,6 @@ void release(Strips* s) { delete[] reinterpret_cast<uint8_t*>(s); }
 void release(NeighboursMatrix* m) { delete[] reinterpret_cast<uint8_t*>(m); }
 namespace
 {
-    int longestStrip(const Strips *s)
-    {
-        int longest = 0;
-        for (int i=0;i<s->count;++i)
-        {
-            if (s->element[i].count > longest) {
-                longest = s->element[i].count;
-            }
-        }
-        return longest;
-    }
-    void initializeIndicesMatrix(const Strips* strips, uint16_t *indices, uint16_t row_size)
-    {
-        
-    }
     void initializePositionsMatrix(const Strips* strips, float* positions, uint16_t longest, uint16_t row_size)
     {
         for (int i=0; i<strips->count; ++i)
@@ -87,7 +72,6 @@ NeighboursMatrix* NeighboursMatrix::fromStrips(const Strips* strips)
     const size_t N = strips->count;
     const auto total_pixels = strips->getTotalPixelsCount();
     auto [indices,row_size] = strips->makeIndicesMatrix();
-    initializeIndicesMatrix(strips,indices,row_size);
     float *positions = new float[row_size * N];
     initializePositionsMatrix(strips,positions,longest,row_size);
     constexpr uint16_t MaxNeighboursCnt = 6;

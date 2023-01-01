@@ -47,7 +47,7 @@ class ControllerOneLed:
 
     def refresh(self):
         print("current pos",self.currentPos,end='\r')
-        tosend = makeSetCommand( ((0,250,self.bck), (self.currentPos,1,self.color)),True)
+        tosend = makeSetCommand( ((0,450,self.bck), (self.currentPos,1,self.color)),True)
         send = self.sock.send(tosend)
         if send == 0:   print('send failed')
 
@@ -60,7 +60,7 @@ class ControllerOneLed:
             self.currentPos -= 1
             self.refresh()
     def onRight(self):
-        if self.currentPos < 249:
+        if self.currentPos < 450:
             self.currentPos += 1
             self.refresh()
     def onUp(self):

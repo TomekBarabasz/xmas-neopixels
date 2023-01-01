@@ -11,10 +11,11 @@ wave-1 5 H:50 B:2 B:0
 
 #random walk H:delay_ms H:fade_delay_ms H:hue_min H:hue_max B:hue_inc B:hue_wrap B:hue_fade
 rwalk 12 H:100 H:200 H:0 H:360 B:1 B:0 B:200
-rwalk-blue 12 H:50 H:100 H:240 H:360 B:1 B:0 B:220
-rwalk-red 12 H:50 H:100 H:0 H:120 B:1 B:0 B:220
+rwalk-blue 12 H:50 H:100 H:240 H:360 B:1 B:0 B:235
+rwalk-blue-slow 12 H:50 H:150 H:240 H:360 B:1 B:0 B:235
+rwalk-red 12 H:50 H:100 H:0 H:120 B:1 B:0 B:235
 
 #digital rain: H:delay_ms H:hue_min H:hue_max B:hue_inc B:hue_mode H:color_value B:head_length B:tail_length_min B:tail_length_max
-drain 13 H:80 H:120 H:120 B:0 B:0 H:100 B:2 B:10 B:25
-drain-rnd 13 H:80 H:0 H:360 B:0 B:2 H:100 B:2 B:10 B:25
-drain-blue 13 H:80 H:240 H:360 B:1 B:0 H:100 B:2 B:10 B:20
+drain 13 H:80 H:120 H:120 B:0 B:0 H:100 B:1 B:10 B:25
+drain-rnd 13 H:150 H:0 H:360 B:0 B:2 H:100 B:1 B:10 B:25
+drain-blue 13 H:150 H:240 H:360 B:1 B:0 H:100 B:1 B:10 B:20

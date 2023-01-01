@@ -58,16 +58,23 @@ static constexpr Strips rings { 8, {
     }
 };
 
-static constexpr Strips strips { 9, {
+static constexpr Strips strips { 16, {
         {0,28,1},
-        {30,27,-1},//{from 30,to 56,0},
-        {59,27,1},//{59,85,1},
-        {88,25,-1},//{88,112,0},
-        {115,27,1},//{115,141,1},
-        {144,27,-1},//{144,170,0},
-        {173,27,1},//{173,199,1},
-        {201,22,-1},//{201,222,0},
-        {224,22,1},//{224,245,1}
+        {29,27,-1},
+        {57,28,1},
+        {86,26,-1},
+        {113,28,1},
+        {142,28,-1},
+        {171,28,1},
+        {200,28,-1},
+        {229,27,1},
+        {257,27,-1},
+        {285,27,1},
+        {313,28,-1},
+        {342,28,1},
+        {371,28,-1},
+        {402,22,1},
+        {425,22,-1},
     }
 };
 
@@ -221,7 +228,7 @@ extern "C" void neopixel_main(void* params)
     LedStripConfig cfg = {1,2,segments};
 #else
     RMTDriverConfig rmt = {GPIO_NUM_16, RMT_CHANNEL_0, 8};
-    LedSegmentConfig segment {247, SegmentType::WS2811, DriverType::RMT, &rmt};
+    LedSegmentConfig segment {450, SegmentType::WS2811, DriverType::RMT, &rmt};
     LedStripConfig cfg = {1,1,&segment};
 #endif
     strip = LedStrip::create(cfg);

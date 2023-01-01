@@ -40,7 +40,7 @@ def LoadAnimationPresets(filename):
     Presets = {}
     with filename.open() as fn:
         for line in fn:
-            if line[0]=='#' or len(line)==0: continue
+            if line[0]=='#' or len(line)==1: continue
             split = line.strip(' \t\n').split(' ')
             print(split)
             Presets[ split[0] ] = parse_start_command(split[1:])

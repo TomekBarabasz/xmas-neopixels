@@ -1,44 +1,14 @@
-import unittest,random
+import unittest,math
 from itertools import accumulate,count
 from bisect import bisect_left
 from dataclasses import dataclass
 from utils import loadConfigFile
 from random import randrange,sample
 from utils import *
+from statistics import mean,median
 
 class Base:
     pass
-
-def makeNeighboursFromStrips(strips):
-    # neighbours = [ neighbour ]
-    # neighbour = [ (left|None,up|,right|None,bottom|None) ]
-    Neighbours = {}
-    npxInVStrip = [ s[1] for s in strips ]
-    max_pxInVStrip = max(npxInVStrip)
-    IdxStrips = stripIndices(strips)
-    Dv = [ (max_pxInVStrip-1) / (n_int -1)  for n_int in npxInVStrip ]
-    Pv = [ [dv*n for n in range(len(s))] for s,dv in zip(IdxStrips,Dv) ]
-    
-    for ih in range(len(Pv)):
-        pv = Pv[ih]
-        for iv in range(len(pv)):
-            v = pv[iv]
-            current_idx = IdxStrips[ih][iv]
-            neighbours = []
-            if ih > 0:
-                idx = RandomWalkAnimation.findClosest(Pv[ih-1], v)
-                neighbours.extend( [IdxStrips[ih-1][i] for i in idx] )
-            if iv > 0:
-                neighbours.append(IdxStrips[ih][iv-1])
-            if ih < len(Pv)-1:
-                idx = RandomWalkAnimation.findClosest(Pv[ih+1], v)
-                idxs = IdxStrips[ih+1]
-                ##print('idxs=',idxs,'idx=',idx,'pv=',Pv[ih+1],'v=',v, end=' ')
-                neighbours.extend( [idxs[i] for i in idx] )
-            if iv < len(pv)-1:
-                neighbours.append(IdxStrips[ih][iv+1])
-            Neighbours[current_idx] = neighbours
-    return Neighbours
 
 class RandomWalkAnimation:
     def __init__(self, params, cfg):
@@ -58,18 +28,7 @@ class RandomWalkAnimation:
     @staticmethod
     def getParams():
         return 'delay_ms.H,fade_delay_ms.H,hue_inc:B,fade.B'
-    
-    @staticmethod
-    def findClosest(vector,val):
-        N = len(vector)
-        for i in range(N):
-            if vector[i] == val:
-                return [i]
-            elif vector[i] > val:
-                return [i-1,i] if i > 0 else [i]
-        return [N-1]
-    
-    
+        
     def step(self, dt):
         self.dt += dt
         self.fade_dt += dt
@@ -101,22 +60,22 @@ class RandomWalkAnimation_TestCase(unittest.TestCase):
     def test_001(self):
         print('test test_001')
         #neighbours are indices!
-        c = RandomWalkAnimation.findClosest( [1,2,3],1)
+        c = findClosest( [1,2,3],1)
         self.assertEqual(c,[0])
 
-        c = RandomWalkAnimation.findClosest( [1,2,3],2)
+        c = findClosest( [1,2,3],2)
         self.assertEqual(c,[1])
 
-        c = RandomWalkAnimation.findClosest( [1,2,3],3)
+        c = findClosest( [1,2,3],3)
         self.assertEqual(c,[2])
 
-        c = RandomWalkAnimation.findClosest( [1,2,3],1.5)
+        c = findClosest( [1,2,3],1.5)
         self.assertEqual(c,[0,1])
 
-        c = RandomWalkAnimation.findClosest( [1,2,3],2.5)
+        c = findClosest( [1,2,3],2.5)
         self.assertEqual(c,[1,2])
 
-        c = RandomWalkAnimation.findClosest( [1,2,3],3.5)
+        c = findClosest( [1,2,3],3.5)
         self.assertEqual(c,[2])
 
     def test_002(self):
@@ -450,20 +409,192 @@ class TextScrollAnimation_TestCase(unittest.TestCase):
         pass
 
 class PlasmaAnimation:
+    @dataclass
+    class SineWave:
+        origin : (int,int)
+        phase : int
+        phase_speed : int
+        size : int
+        amplitude : int
+        move : int
+        color : (int,int,int)
+    
     def __init__(self, params, cfg):
         strips = cfg.strips
         self.totalPixels = totalPixels(strips)
         self.pixels = [(0,0,0)] * self.totalPixels
         self.dt = 0
         self.params = params
-        self.neighbours = makeNeighboursFromStrips(strips)
+        self.positionMatrix = makePositionMatrix(strips)
         self.blobs = [(origin,size,mv,hsv)]
+        self.sin_table = [math.sin(math.pi/2/256*x) for x in range(256)]
+        self.width = len(strips)
+        self.height = longestStrip(strips)
+        self.waves = makeWaves(self.params)
 
-    def sinus(self,origin,size,mv,hsv):
-        pass
+    @staticmethod
+    def makeWaves(params,width,height):
+        Waves = []
+        for i in count(1):
+            if hasattr(params,f'wave{i}'):
+                size,ampl,phase_speed, move_speed,color = getattr(params, f'wave{i}')
+                w = SineWave( (randrange(0,width,),randrange(0,height)), randrange(0,256), phase_speed, size, ampl, move_speed, color )
+                Waves.append(w)
+            else:
+                break
+        return Waves
+    
+    def sin(self, x):
+        n = x / 256
+        x = x % 256
+        if n & 1: x = 256-x
+        #revert 1 3 5 7 i.e. sin_table[256-x]
+        #invert 2 3  6 7 10 11 -1*sin_table[x]
+        s = -1 if n//1 & 1 else 1
+        return s * self.sin_table[x]
+        #if n==0: return self.sin_table[x]
+        #elif n==1: return self.sin_table[256-x]
+        #elif n==2: return -self.sin_table[x]
+        #elif n==3: return -self.sin_table[256-x]
+
+    def drawWave(self, wave):
+        for line in self.positionMatrix:
+            for px,py,i in line:
+                r = math.sqrt( (wave.origin[0] - px)**2 + (wave.origin[1]-py)**2 ) * wave.size
+                ampl = wave.ampl * self.sin(r + wave.phase)
     
     def step(self, dt):
         self.dt += dt
         if self.dt * 1000 > self.params.delay_ms:
             self.dt = 0
+            self.pixels = [(0,0,0)] * self.totalPixels
+            for wave in self.Waves:
+                self.drawWave(wave)
+                wave.phase += wave.phase_speed
+        return self.pixels
+
+class PlasmaAnimation_TestCase(unittest.TestCase):
+    def test_001(self):
+        #strips = [[0,28,1],[30,27,-1],[59,27,1],[88,25,-1],[115,27,1],[144,27,-1],[173,27,1],[201,22,-1],[224,22,1]]
+        strips = [[0,5,1],[7,4,-1],[12,6,1]]
+        Pm =makePositionMatrix(strips)
+        for p in Pm:
+            print(p)
+
+class WorleyNoiseAnimation:      
+    def __init__(self, params, cfg):
+        strips = cfg.strips
+        self.totalPixels = totalPixels(strips)
+        self.pixels = [(0,0,0)] * self.totalPixels
+        self.dt = 0
+        self.params = params
+        self.positionMatrix = makePositionMatrix(strips)
+        self.xmax = len(self.positionMatrix)
+        self.ymax = int(max( row[-1][1] for row in self.positionMatrix ))
+        n_features = self.params.num_features
+        self.features = [ random2D(self.xmax,self.ymax) for _ in range(n_features) ]
+        hue_min = params.hue_min if hasattr(params,'hue_min') else 0
+        hue_max = params.hue_max if hasattr(params,'hue_max') else 360
+        self.colors = [randrange(hue_min, hue_max) for _ in range(n_features)]
+        self.tmp = [(0,0)] * self.totalPixels
+
+    @staticmethod
+    def getParams():
+        return 'delay_ms.H,num_featuers:B,hue_min:H,hue_max:H,move_speed:B'
+
+    def step(self, dt):
+        self.dt += dt
+        if self.dt * 1000 > self.params.delay_ms:
+            self.dt = 0
+            # recreate pixels array
+            # move features
+            speed = self.params.move_speed
+            for i in range(len(self.features)):
+                x,y = self.features[i]
+                dx,dy = random2D(2*speed+1,2*speed+1)
+                x = x + dx - speed
+                x = clamp(x,0,self.xmax)
+                y = y + dy - speed
+                y = clamp(y,0,self.ymax)
+                self.features[i] = (x,y)
+                #print(f'feature {i} pos {x} {y} dx {dx} dy {dy}')
+            
+            n_features = self.params.num_features
+            longest = [0] * n_features
+            for line in self.positionMatrix:
+                for px,py,idx in line:
+                    dmin = 1e6
+                    fim = None
+                    for fi in range(n_features):
+                        fx,fy = self.features[fi]
+                        dx = (px-fx)
+                        dy = (py-fy)
+                        d = dx*dx + dy*dy
+                        
+                        if d < dmin : 
+                            dmin = d
+                            fim = fi
+                            if d > longest[fi] : longest[fi] = d
+                    self.tmp[idx] = (dmin,fim)
+            
+            #longest = [math.sqrt(l) for l in longest]
+            feature_vals = [[]] * n_features
+            for idx in range(self.totalPixels):
+                dmin,fidx = self.tmp[idx]
+                #val = 255 - int(math.sqrt(dmin) / longest[fidx] * 255)
+                val = dmin/longest[fidx]
+                feature_vals[fidx].append( val )
+                val = 255 * val
+                val = clamp(255 - int(val), 0, 255)
+                self.pixels[idx] = hsv_to_rgb(self.colors[fidx],255,val)
+            
+            for i in range(n_features):
+                break
+                vals = feature_vals[i]
+                _min = round(min(vals),3)
+                _max = round(max(vals),3)
+                _mean = round(mean(vals),3)
+                _median = round(median(vals),3)
+                print(f'feature {i} min {_min} max {_max} mean {_mean} median {_median}')
+
+        return self.pixels
+
+class WorleyNoise_TestCase(unittest.TestCase):
+    def test_001(self):
+        pass
+
+class LavaAnimation:
+    def __init__(self, params, cfg):
+        strips = cfg.strips
+        self.totalPixels = totalPixels(strips)
+        self.pixels = [(0,0,0)] * self.totalPixels
+        self.dt = 0
+        self.params = params
+        self.positionMatrix = makePositionMatrix(strips)
+    
+    def step(self, dt):
+        self.dt += dt
+        if self.dt * 1000 > self.params.delay_ms:
+            self.dt = 0
+            # recreate pixels array
+            # self.pixels = [(0,0,0)] * self.totalPixels
+
+        return self.pixels
+
+class _2DTrajectory:
+    def __init__(self, params, cfg):
+        strips = cfg.strips
+        self.totalPixels = totalPixels(strips)
+        self.pixels = [(0,0,0)] * self.totalPixels
+        self.dt = 0
+        self.params = params
+        self.positionMatrix = makePositionMatrix(strips)
+    
+    def step(self, dt):
+        self.dt += dt
+        if self.dt * 1000 > self.params.delay_ms:
+            self.dt = 0
+            # recreate pixels array
+            # self.pixels = [(0,0,0)] * self.totalPixels
+
         return self.pixels

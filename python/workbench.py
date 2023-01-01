@@ -2,7 +2,18 @@ import pygame,sys,argparse,unittest,re
 from pathlib import Path
 from datetime import datetime
 from time import sleep
-from animations import RandomWalkAnimation, RandomWalkAnimation_TestCase, HorizontalWaveAnimation, DigitalRainAnimation, DigitalRainAnimation_TestCase, GameOfLifeAnimation, PlasmaAnimation
+from animations import (
+    RandomWalkAnimation, 
+    RandomWalkAnimation_TestCase,
+    HorizontalWaveAnimation, 
+    DigitalRainAnimation, 
+    DigitalRainAnimation_TestCase, 
+    GameOfLifeAnimation, 
+    PlasmaAnimation,
+    PlasmaAnimation_TestCase,
+    WorleyNoiseAnimation,
+    LavaAnimation
+)
 from utils import loadConfigFile
 
 def got_quit_event(events):
@@ -62,6 +73,8 @@ def createAnimation(name_and_params,config):
                     'drain' : DigitalRainAnimation,
                     'gol'   : GameOfLifeAnimation,
                     'plasma': PlasmaAnimation,
+                    'lava'  : LavaAnimation,
+                    'worley': WorleyNoiseAnimation,
     }
     if params is None:
         print("please provide animation parametrers :", Animations[name].getParams())
