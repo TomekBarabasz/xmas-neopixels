@@ -10,7 +10,7 @@ from statistics import mean,median
 class Base:
     pass
 
-class RandomWalkAnimation:
+class RandomWalk:
     def __init__(self, params, cfg):
         strips = cfg.strips
         self.totPixels = totalPixels(strips)
@@ -56,7 +56,7 @@ class RandomWalkAnimation:
                 self.brightness[i] = (self.brightness[i] * f) >> 8
         return self.pixels
 
-class RandomWalkAnimation_TestCase(unittest.TestCase):
+class RandomWalk_TestCase(unittest.TestCase):
     def test_001(self):
         print('test test_001')
         #neighbours are indices!
@@ -113,7 +113,7 @@ class RandomWalkAnimation_TestCase(unittest.TestCase):
             if len(bad)>0:
                 print('idx=',i,'bad=',bad)
 
-class HorizontalWaveAnimation:
+class HorizontalWave:
     def __init__(self, params, cfg):
         self.strips = cfg.strips
         self.totPixels = self.strips[-1][1] + 1
@@ -147,7 +147,7 @@ class HorizontalWaveAnimation:
                     self.pixels[i] = hsv
         return self.pixels
 
-class VerticalWaveAnimation:
+class VerticalWave:
     def __init__(self, params, cfg):
         strips = cfg.strips
         self.hlines = self._makeHorizontalLines(strips)
@@ -197,7 +197,7 @@ class VerticalWaveAnimation:
                 self.lineHue[idx] = hue
         return self.pixels
 
-class GameOfLifeAnimation:
+class GameOfLife:
     def __init__(self, params, cfg):
         strips = cfg.strips
         self.totalPixels = totalPixels(strips)
@@ -266,7 +266,7 @@ class GameOfLifeAnimation:
             
         return self.pixels
 
-class DigitalRainAnimation:
+class DigitalRain:
     @dataclass
     class Line:
         state : int #1 - drawing 0 - waiting        
@@ -346,7 +346,7 @@ class DigitalRainAnimation:
                         self.restartLine(idx,line)
         return self.pixels
 
-class DigitalRainAnimation_TestCase(unittest.TestCase):
+class DigitalRain_TestCase(unittest.TestCase):
     def xtest_001(self):
         strips = [[0,28,1],[30,27,-1],[59,27,1],[88,25,-1],[115,27,1],[144,27,-1],[173,27,1],[201,22,-1],[224,22,1]]
         Lines = stripIndices(strips)
@@ -377,7 +377,7 @@ class DigitalRainAnimation_TestCase(unittest.TestCase):
                 break
             print( hmin,hmax )
 
-class TextScrollAnimation:
+class TextScroll:
     @dataclass
     class Line:
         state : int #1 - drawing 0 - waiting        
@@ -404,11 +404,11 @@ class TextScrollAnimation:
   
         return self.pixels
 
-class TextScrollAnimation_TestCase(unittest.TestCase):
+class TextScroll_TestCase(unittest.TestCase):
     def test_001(self):
         pass
 
-class PlasmaAnimation:
+class Plasma:
     @dataclass
     class SineWave:
         origin : (int,int)
@@ -473,15 +473,31 @@ class PlasmaAnimation:
                 wave.phase += wave.phase_speed
         return self.pixels
 
-class PlasmaAnimation_TestCase(unittest.TestCase):
+class Plasma_TestCase(unittest.TestCase):
     def test_001(self):
-        #strips = [[0,28,1],[30,27,-1],[59,27,1],[88,25,-1],[115,27,1],[144,27,-1],[173,27,1],[201,22,-1],[224,22,1]]
-        strips = [[0,5,1],[7,4,-1],[12,6,1]]
+        #strips = [[0,5,1],[7,4,-1],[12,6,1]]
+        strips=[
+        [0,28,1],
+        [29,27,-1],
+        [57,28,1],
+        [86,26,-1],
+        [113,28,1],
+        [142,28,-1],
+        [171,28,1],
+        [200,28,-1],
+        [229,27,1],
+        [257,27,-1],
+        [285,27,1],
+        [313,28,-1],
+        [342,28,1],
+        [371,28,-1],
+        [402,22,1],
+        [425,22,-1]]
         Pm =makePositionMatrix(strips)
         for p in Pm:
             print(p)
 
-class WorleyNoiseAnimation:      
+class WorleyNoise:      
     def __init__(self, params, cfg):
         strips = cfg.strips
         self.totalPixels = totalPixels(strips)
@@ -563,7 +579,7 @@ class WorleyNoise_TestCase(unittest.TestCase):
     def test_001(self):
         pass
 
-class LavaAnimation:
+class Lava:
     def __init__(self, params, cfg):
         strips = cfg.strips
         self.totalPixels = totalPixels(strips)
@@ -581,7 +597,133 @@ class LavaAnimation:
 
         return self.pixels
 
-class _2DTrajectory:
+class Fire:
+    @staticmethod
+    def heatColor(temperature):
+        # Scale 'heat' down from 0-255 to 0-191,
+        # which can then be easily divided into three
+        # equal 'thirds' of 64 units each.
+        t192 = scale8_video( temperature, 191)
+
+        # calculate a value that ramps up from
+        # zero to 255 in each 'third' of the scale.
+        heatramp = (t192 & 0x3F) << 2; # 0..63, scale up to 0..252
+
+        # now figure out which third of the spectrum we're in:
+        if t192 & 0x80:
+            # we're in the hottest third
+            return (255,255,heatramp)
+        elif t192 & 0x40:
+            # we're in the middle third
+            return (255,heatramp, 0)
+        else:
+            # we're in the coolest third
+            return (heatramp, 0, 0)
+    
+    @staticmethod
+    def getParams():
+        return 'delay_ms.H,cooling.B,sparking.B,revert.B'
+
+    def __init__(self, params, cfg):
+        strips = cfg.strips
+        self.totalPixels = totalPixels(strips)
+        self.pixels = [(0,0,0)] * self.totalPixels
+        self.heat = [0] * self.totalPixels
+        self.dt = 0
+        self.params = params
+        self.strips = stripIndices(strips)
+        if params.revert > 0:
+            self.strips = [list(reversed(s)) for s in self.strips]
+        self.N = max([s[1] for s in strips]) #longest
+    
+    def step(self, dt):
+        self.dt += dt
+        if self.dt * 1000 > self.params.delay_ms:
+            self.dt = 0
+            # recreate pixels array
+            cooling_factor = int((self.params.cooling*10) / self.N + 2)
+            for strip in self.strips:
+                # Step 1.  Cool down every cell
+                for idx in strip:
+                    self.heat[idx] = max(self.heat[idx] - randrange(cooling_factor),0)
+                # Step 2.  Heat from each cell drifts 'up' and diffuses a little
+                rstrip = list(reversed(strip))
+                for i in range(len(rstrip)-2):
+                    i0,i1,i2 = rstrip[i],rstrip[i+1],rstrip[i+2]
+                    self.heat[i0] = (self.heat[i1] + 2*self.heat[i2])/3
+
+                # Step 3.  Randomly ignite new 'sparks' of heat near the bottom
+                rnd = randrange(0xffffff)
+                r1,r2,r3 = rnd & 0xff, (rnd >> 8) & 0xff, (rnd >> 16)
+                if r1 < self.params.sparking:
+                    pos = strip[ r2 % len(strip)//3 ]
+                    rr = 255-160
+                    self.heat[pos] = min(self.heat[pos] + 160 + r3 % rr, 255)
+
+            for i in range(len(self.heat)):
+                self.pixels[i] = Fire.heatColor(self.heat[i])
+
+        return self.pixels
+
+def makeHueGenerator(hue_min, hue_max, _hue_inc, hue_mode):
+    def genWrapped():
+        hue = hue_min
+        hue_inc = _hue_inc
+        while True:
+            yield hue
+            hue += hue_inc
+            if hue < hue_min:
+                hue = hue_max
+            elif hue > hue_max:
+                hue = hue_min
+    def genBounce():
+        hue = hue_min
+        hue_inc = _hue_inc
+        while True:
+            yield hue
+            hue += hue_inc
+            if hue > hue_max:
+                hue = hue_max
+                hue_inc = -hue_inc
+            elif hue < hue_min:
+                hue = hue_min
+                hue_inc = -hue
+    def genRandom():
+        while True:
+            yield randrange(hue_min,hue_max)
+    if hue_mode == 0:
+        return genBounce()
+    elif hue_mode == 1:
+        return genWrapped()
+    elif hue_mode == 2:
+        return genRandom()
+
+class Metaballs:
+    @dataclass
+    class Metaball:
+        pos:(int,int)
+        speed:(float,float,float)
+        radius:(float,float,float)
+        color:(int,int,int)
+
+    @staticmethod
+    def makeMetaball(xmax,ymax,max_speed,max_radius,color):
+        x = randrange(xmax)
+        y = randrange(ymax)
+        r = randrange(max_radius*100//2,max_radius*100)/100
+        R2 = r*r
+        R4 = R2*R2
+        R6 = R4*R2
+        s = randrange(max_speed)/100 if max_speed > 0 else 0
+        angle = 2*math.pi * randrange(360)/360
+        sx = s*math.cos(angle)
+        sy = s*math.sin(angle)
+        return Metaballs.Metaball( (x,y), (sx,sy), (R2,R4,R6), color)
+    
+    @staticmethod
+    def getParams():
+        return 'delay_ms.H,n_mballs:B,max_speed:B,max_radius:B,hue_min:H,hue_max:H,hue_inc:B,hue_mode:B'
+
     def __init__(self, params, cfg):
         strips = cfg.strips
         self.totalPixels = totalPixels(strips)
@@ -589,12 +731,119 @@ class _2DTrajectory:
         self.dt = 0
         self.params = params
         self.positionMatrix = makePositionMatrix(strips)
+        self.xmax = len(self.positionMatrix)-1
+        self.ymax = int(max( max([x[1] for x in col]) for col in self.positionMatrix ))
+        hueGen = makeHueGenerator(params.hue_min, params.hue_max, params.hue_inc, params.hue_mode)
+        self.mballs = [Metaballs.makeMetaball(self.xmax, self.ymax, params.max_speed,params.max_radius,hsv_to_rgb(next(hueGen),255,255)) for _ in range(params.n_mballs)]
+        
+    @staticmethod
+    def updateSpeed(v,dv,max_v):
+        v += dv
+        d=1
+        if v < 0:
+            v = 0
+            d = -1
+        elif v > max_v:
+            v = max_v
+            d = -1
+        return v,d
+
+    @staticmethod
+    def calcInfluence(r2,R):
+        r4 = r2*r2
+        r6 = r4*r2
+        R2,R4,R6 = R
+        return -0.444*r6/R6 + 1.888*r4/R4 - 2.444*r2/R2 + 1 if r2 <R2 else 0
+
+    def moveMballs(self):
+        cx,cy=0,0
+        for mball in self.mballs:
+            x,y = mball.pos
+            cx+=x
+            cy+=y
+        N = len(self.mballs)
+        cx /= N
+        cy /= N
+        for mball in self.mballs:
+            x,y = mball.pos
+            sx,sy = mball.speed
+            dx = cx-x
+            dy = cy-y
+            d = math.sqrt(dx*dx+dy*dy)
+            sx += dx * d * self.params.drag_factor
+            sy += dy * d * self.params.drag_factor
+            x,dx1 = Metaballs.updateSpeed(x,sx,self.xmax)
+            y,dy1 = Metaballs.updateSpeed(y,sy,self.ymax)
+            mball.pos = (x,y)
+            mball.speed = (sx*dx1,sy*dy1)
+
+    def updatePixels(self):
+        for col in self.positionMatrix:
+            for x,y,idx in col:
+                color = [0,0,0]
+                for mball in self.mballs:
+                    mx,my = mball.pos
+                    r2 = (mx-x)**2 + (my-y)**2
+                    i = Metaballs.calcInfluence(r2,mball.radius)
+                    #print(f'x={x} y={y} mx={mx} my={my} r2={r2} inf={i}')
+                    for ci in range(3):
+                        color[ci] += mball.color[ci] * i
+                for ci in range(3):
+                    self.pixels[idx] = [clamp(color[ci],0,255) for ci in range(3)]
+                
+    def step(self, dt):
+        self.dt += dt
+        if self.dt * 1000 > self.params.delay_ms:
+            self.dt = 0
+            self.moveMballs()
+            # recreate pixels array
+            self.updatePixels()
+        return self.pixels
+
+class Lissajous:
+    class Particle:
+        def __init__(self, o,a,w,f,c,length):
+            self.o = o
+            self.a = a
+            self.w = w
+            self.f = f
+            self.c = c
+            self.tail = [(((0,0,0),0))] * length
+
+        def step(self):
+            self.tail[1:] = self.tail[0:-1]
+
+        def draw(self, pixels):
+            for c,idx in self.tail:
+                p = pixels[idx]
+                c1 = [min(c[i]+p[i],255) for i in range(3)]
+                pixels[idx] = tuple(c1)
+        
+    @staticmethod
+    def getParams():
+        return 'delay_ms.H,n_particles.B,....'
+
+    def __init__(self, params, cfg):
+        strips = cfg.strips
+        self.totalPixels = totalPixels(strips)
+        self.pixels = [(0,0,0)] * self.totalPixels
+        self.dt = 0
+        self.params = params
+        self.positionMatrix = makePositionMatrix(strips)
+        self.xmax = len(self.positionMatrix)-1
+        self.ymax = int(max( max([x[1] for x in col]) for col in self.positionMatrix ))
+    
+    def moveParticles(self):
+        pass
+    
+    def updatePixels(self):
+        pass
     
     def step(self, dt):
         self.dt += dt
         if self.dt * 1000 > self.params.delay_ms:
             self.dt = 0
+            self.moveParticles()
             # recreate pixels array
-            # self.pixels = [(0,0,0)] * self.totalPixels
-
+            self.updatePixels()
         return self.pixels

@@ -21,6 +21,10 @@ def scale8(rgb, scale):
     scale_fixed = scale + 1
     return [ (c * scale_fixed) >> 8 for c in rgb ]
 
+def scale8_video(value, scale):
+    #return (((int)i * (int)scale) >> 8) + ((i && scale) ? 1:0);
+    return (int(value * scale) >> 8) + (1 if value > 0 and scale > 0 else 0)
+
 def hsv_to_rgb(h,s,v):
     h_ = h % 360
     region = h_ // 60

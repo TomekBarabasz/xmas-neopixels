@@ -3,16 +3,18 @@ from pathlib import Path
 from datetime import datetime
 from time import sleep
 from animations import (
-    RandomWalkAnimation, 
-    RandomWalkAnimation_TestCase,
-    HorizontalWaveAnimation, 
-    DigitalRainAnimation, 
-    DigitalRainAnimation_TestCase, 
-    GameOfLifeAnimation, 
-    PlasmaAnimation,
-    PlasmaAnimation_TestCase,
-    WorleyNoiseAnimation,
-    LavaAnimation
+    HorizontalWave,
+    RandomWalk,
+    RandomWalk_TestCase,
+    DigitalRain, 
+    DigitalRain_TestCase, 
+    GameOfLife, 
+    Plasma,
+    Plasma_TestCase,
+    WorleyNoise,
+    Lava,
+    Metaballs,
+    Fire
 )
 from utils import loadConfigFile
 
@@ -68,13 +70,15 @@ def parseAnimationParameters(name_and_params):
 
 def createAnimation(name_and_params,config):
     name,params = parseAnimationParameters(name_and_params)
-    Animations = {  'hwave' : HorizontalWaveAnimation,
-                    'rwalk' : RandomWalkAnimation,
-                    'drain' : DigitalRainAnimation,
-                    'gol'   : GameOfLifeAnimation,
-                    'plasma': PlasmaAnimation,
-                    'lava'  : LavaAnimation,
-                    'worley': WorleyNoiseAnimation,
+    Animations = {  'hwave' : HorizontalWave,
+                    'rwalk' : RandomWalk,
+                    'drain' : DigitalRain,
+                    'gol'   : GameOfLife,
+                    'plasma': Plasma,
+                    'lava'  : Lava,
+                    'worley': WorleyNoise,
+                    'mballs': Metaballs,
+                    'fire'  : Fire
     }
     if params is None:
         print("please provide animation parametrers :", Animations[name].getParams())
