@@ -7,6 +7,7 @@
 #include <random.hpp>
 #include <RandomWalkAnimation.hpp>
 #include <DigitalRainAnimation.hpp>
+#include <FireAnimation.hpp>
 #include <esp_log.h>
 
 namespace Neopixel
@@ -167,104 +168,6 @@ struct Random : Animation
             ms_to_fade = delay_fade_ms;
         }
         strip->refresh();
-    }
-};
-
-struct Fire : Animation
-{
-    LedStrip* strip;
-    uint16_t delay_ms;
-    // COOLING: How much does the air cool as it rises?
-    // Less cooling = taller flames.  More cooling = shorter flames.
-    // Default 50, suggested range 20-100 
-    uint8_t cooling;
-
-    // SPARKING: What chance (out of 255) is there that a new spark will be lit?
-    // Higher chance = more roaring fire.  Lower chance = more flickery fire.
-    // Default 120, suggested range 50-200.
-    uint8_t sparking;
-
-    uint8_t direction;
-    uint16_t size;
-    uint8_t *heat;
-    RandomGenerator *random;
-
-    Fire(LedStrip *strip_, int datasize, void *data, const Strips* spatialConfig, RandomGenerator *random) : strip(strip_), random(random)
-    {
-        delay_ms = decode<uint16_t>(data);
-        cooling = decode<uint8_t>(data);
-        sparking = decode<uint8_t>(data);
-        direction = decode<uint8_t>(data);
-
-        size = strip->getLength();
-        heat = new uint8_t[size];
-        ESP_LOGI("Fire-animation", "Fire animation : delay %d cooling %d sparking %d direction %d", delay_ms, cooling, sparking, direction);
-    }
-    ~Fire()
-    {
-        delete[] heat;
-    }
-    uint16_t get_delay_ms() override { return delay_ms; }
-    void step() override
-    {
-        const uint8_t cooling_factor = (cooling*10) / size + 2;
-
-        uint32_t rnd = 0;
-        // Step 1.  Cool down every cell
-        for(int i=0;i<size;++i)
-        {
-            if (0==rnd) rnd = random->make_random();
-            heat[i] = saturated_sub(heat[i], uint8_t((rnd&0xFF) % cooling_factor));
-            rnd >>= 8;
-        }
-
-        // Step 2.  Heat from each cell drifts 'up' and diffuses a little
-        for( int k= size - 1; k >= 2; k--) {
-            heat[k] = (heat[k - 1] + heat[k - 2] + heat[k - 2] ) / 3;
-        }
-
-        // Step 3.  Randomly ignite new 'sparks' of heat near the bottom
-        rnd = random->make_random();
-        if( (rnd&0xFF) < sparking ) 
-        {
-            rnd >>= 8;
-            const uint16_t pos = uint16_t(rnd&0xFFFF) % size;
-            rnd >>= 16;
-            const uint8_t const_add = 160;
-            const uint8_t random_add = 255-const_add;
-            heat[pos] = saturated_add( heat[pos], uint8_t(const_add + uint8_t(rnd&0xFF)%random_add));
-        }
-
-        // Step 4.  Map from heat cells to LED colors
-        for( int j = 0; j < size; j++) 
-        {
-            const int pos = (direction==0 ? j : size-1-j);
-            strip->fillPixelsRGB(pos,1,HeatColor( heat[j] ));
-        }
-        strip->refresh();
-    }
-    RGB HeatColor(uint8_t temperature)
-    {
-        // Scale 'heat' down from 0-255 to 0-191,
-        // which can then be easily divided into three
-        // equal 'thirds' of 64 units each.
-        const uint8_t t192 = scale8_video( temperature, 191);
-
-        // calculate a value that ramps up from
-        // zero to 255 in each 'third' of the scale.
-        const uint8_t heatramp = (t192 & 0x3F) << 2; // 0..63, scale up to 0..252
-
-        // now figure out which third of the spectrum we're in:
-        if( t192 & 0x80) {
-            // we're in the hottest third
-            return {255,255,heatramp};
-        } else if( t192 & 0x40 ) {
-            // we're in the middle third
-            return {255,heatramp, 0};
-        } else {
-            // we're in the coolest third
-            return {heatramp, 0, 0};
-        }
     }
 };
 
@@ -761,7 +664,7 @@ Animation* Animation::create(LedStrip*strip,int animation_id, void* data, const 
         //case 1: return new Cylon(strip, animation_data_size, data);
         //case 2: return new Reel100(strip, animation_data_size, data);
         case 3: return new Random(strip, animation_data_size, data, strips, random);
-        case 4: return new Fire(strip, animation_data_size, data, strips, random);
+        case 4: return new FireAnimation(strip, animation_data_size, data, strips, random);
         case 5: return new Wave(strip, animation_data_size, data);
         //case 6: return new VerticalRings(strip, animation_data_size, data);
         //case 7: return new RotatingRings(strip, animation_data_size, data);

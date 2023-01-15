@@ -110,8 +110,40 @@ def makePositionMatrix(strips):
         Pv.append(pv)
     return Pv
 
+def setPointSmooth(x,y,nmax,strips):
+    def setPoint1D(pos,nmax,strip):
+        y0,n,dir = strip
+        if dir < 0: y0 += n-1
+        dy = (n-1) / (nmax-1)
+        py = y * dy
+        iy = dir*int(py)
+        #print(f'setPoint1D p={pos} y0={y0} n={n} dir={dir} dy={dy} py={py} iy={iy}')
+        return y0+iy,y0+iy+dir,py-int(py)
+    c1 = int(x)
+    c2 = c1+1
+    xs = x-c1
+    i00,i10,ys1 = setPoint1D(y,nmax,strips[c1])
+    if c2 >= len(strips):
+        return  (i00,(1-xs)*(1-ys1)),(i10,(1-ys1))
+    i01,i11,ys2 = setPoint1D(y,nmax,strips[c2])
+    ys = (ys1+ys2)/2
+    return (i00,(1-xs)*(1-ys)),(i01,(1-xs)),(i10,(1-ys)),(i11,xs*ys)
+
+def setPoint(x,y,nmax,strips):
+    y0,n,dir = strips[int(round(x))]
+    if dir < 0: y0 += n-1
+    dy = (n-1) / (nmax-1)
+    py = y * dy
+    idx = y0 + dir*int(round(py))
+    #print(f'setPoint x={x} y={y} y0={y0} n={n} dir={dir} dy={dy} py={py} iy={iy}')
+    return ((idx,1.0),)
+
 def random2D(width,height):
     return randrange(width),randrange(height)
 
 def random3D(max1,max2,max3):
     return randrange(max1),randrange(max2),randrange(max3)
+
+def fadeAll(Pixels,fade):
+    for i in range(len(Pixels)):
+        Pixels[i] = scale8(Pixels[i],fade)

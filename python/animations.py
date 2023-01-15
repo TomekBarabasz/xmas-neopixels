@@ -395,7 +395,7 @@ class TextScroll:
   
     @staticmethod
     def getParams():
-        return 'delay_ms.H'
+        return 'delay_ms.H,text.S,speed.B,mode.B'
 
     def step(self, dt):
         self.dt += dt
@@ -802,23 +802,118 @@ class Metaballs:
 
 class Lissajous:
     class Particle:
-        def __init__(self, o,a,w,f,c,length):
-            self.o = o
-            self.a = a
-            self.w = w
-            self.f = f
-            self.c = c
-            self.tail = [(((0,0,0),0))] * length
-
-        def step(self):
-            self.tail[1:] = self.tail[0:-1]
-
-        def draw(self, pixels):
-            for c,idx in self.tail:
-                p = pixels[idx]
-                c1 = [min(c[i]+p[i],255) for i in range(3)]
-                pixels[idx] = tuple(c1)
+        def __init__(self,center,ampl,omega,phase,hue):
+            self.center = center
+            self.ampl = ampl
+            self.omega = omega
+            self.phase = phase
+            self.hue = hue
+            self.tail = []
+            self.time = 0
+            self.phx = 0 
+            self.phy = 0
         
+        def getPosition(self,dt):
+            self.time += dt
+            t = self.time
+            self.phx += self.phase[0] * dt
+            self.phy += self.phase[1] * dt
+            x = self.center[0] + self.ampl[0] * math.sin(self.omega[0] * t + self.phx)
+            y = self.center[1] + self.ampl[1] * math.cos(self.omega[1] * t + self.phy)
+            return x,y
+        
+    @staticmethod
+    def getParams():
+        return 'delay_ms.H,n_particles.B,omega.H,phase.H,hue.H'
+
+    def __init__(self, params, cfg):
+        self.pixels = [(0,0,0)] * totalPixels(cfg.strips)
+        self.dt = 0
+        self.fade_dt = 0
+        self.params = params
+        self.strips = cfg.strips
+        self.xmax = len(cfg.strips)
+        self.ymax = max( s[1] for s in cfg.strips )
+        center = (self.xmax / 2, self.ymax /2)
+        ampl = (params.ax/100,params.ay/100)
+        w = (params.wx/100,params.wy/100)
+        phi = (params.px/100,params.py/100)
+        print ("Particle params",ampl,w,phi)
+        self.Particles = [self.Particle(center,ampl,w,phi,params.hue)]
+        self.setPoint = setPointSmooth if params.smooth == 1 else setPoint
+
+    def updatePixels(self,dt):
+        for particle in self.Particles:
+            x,y = particle.getPosition(dt)
+            if x<0 or y<0 or int(round(x)) >= len(self.strips): continue#x > self.xmax+1 or y<0 or y>self.ymax+1: continue
+            Pts = self.setPoint(x,y,self.ymax,self.strips)
+            for pt in Pts:
+                idx,v = pt
+                c1 = hsv_to_rgb(particle.hue,255,int(v*v*255))
+                if idx >= len(self.pixels):
+                    print('idx out of range',idx)
+                    continue
+                c = self.pixels[idx]
+                self.pixels[idx] = [min(c[i]+c1[i],255) for i in range(3)]
+    
+    def step(self, dt):
+        self.fade_dt += dt
+        if self.fade_dt * 1000 > self.params.fade_delay_ms:
+            self.fade_dt = 0
+            fadeAll(self.pixels, self.params.fade)
+        self.dt += dt
+        if self.dt * 1000 > self.params.delay_ms:
+            self.updatePixels(self.dt)
+            self.dt = 0
+        return self.pixels
+
+class Lissajous_TestCase(unittest.TestCase):
+    strips=[
+        [0,28,1],
+        [29,27,-1],
+        [57,28,1],
+        [86,26,-1],
+        [113,28,1],
+        [142,28,-1],
+        [171,28,1],
+        [200,28,-1],
+        [229,27,1],
+        [257,27,-1],
+        [285,27,1],
+        [313,28,-1],
+        [342,28,1],
+        [371,28,-1],
+        [402,22,1],
+        [425,22,-1]]
+    def test_setPoint(self):
+        print('test_setPoint')
+        y=14
+        strips = Lissajous_TestCase.strips
+        nmax = max( s[1] for s in strips )
+        print('nmax=',nmax)
+        for x in range(0,len(strips)):
+            idx,v = setPoint(x,y,nmax,strips)[0]
+            print( f'x={x},y={y} idx {idx}')
+    
+    def test_setPointSmooth_x(self):
+        print('test_setPointSmooth_x')
+        y=14
+        strips = Lissajous_TestCase.strips
+        nmax = max( s[1] for s in strips )
+        for x in range(0,len(strips)):
+            Pts = setPointSmooth(x,y,nmax,strips)
+            print( f'x={x},y={y} pts {Pts}')
+    
+    def test_setPointSmooth_y(self):
+        print('test_setPointSmooth_y')
+        x=14
+        strips = Lissajous_TestCase.strips
+        nmax = max( s[1] for s in strips )
+        for y in range(0,nmax):
+            Pts = setPointSmooth(x,y,nmax,strips)
+            print( f'x={x},y={y} pts {Pts}')
+
+class Snake:
     @staticmethod
     def getParams():
         return 'delay_ms.H,n_particles.B,....'
@@ -840,10 +935,15 @@ class Lissajous:
         pass
     
     def step(self, dt):
+        self.fade_dt += dt
+        if self.fade_dt * 1000 > self.params.fade_delay_ms:
+            self.fade_dt = 0
+            fadeAll(self.totPixelsself.params.fade)
+            
         self.dt += dt
         if self.dt * 1000 > self.params.delay_ms:
             self.dt = 0
             self.moveParticles()
             # recreate pixels array
-            self.updatePixels()
+            self.drawPixels()
         return self.pixels

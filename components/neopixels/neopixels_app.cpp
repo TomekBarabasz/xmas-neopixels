@@ -181,12 +181,12 @@ static void start_default_animation(esp_event_loop_handle_t loop_handle)
     encode<uint16_t>(p,12);
     encode<uint16_t>(p,11);
     encode<uint16_t>(p,25);
-    encode<uint16_t>(p,200);
+    encode<uint16_t>(p,150);
     encode<uint16_t>(p,0);
     encode<uint16_t>(p,360);
     encode<int8_t>(p,1);
     encode<uint8_t>(p,1);
-    encode<uint8_t>(p,250);
+    encode<uint8_t>(p,230);
     ESP_LOGI(TAG, "neopixel_main : starting default animation, params ptr %p", default_animation_params);
     ESP_ERROR_CHECK(esp_event_post_to(loop_handle, NEOPIXEL_EVENTS, 0, default_animation_params, sizeof(default_animation_params), portMAX_DELAY));
 }

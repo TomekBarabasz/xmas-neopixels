@@ -5,16 +5,17 @@ from time import sleep
 from animations import (
     HorizontalWave,
     RandomWalk,
-    RandomWalk_TestCase,
+    #RandomWalk_TestCase,
     DigitalRain, 
-    DigitalRain_TestCase, 
+    #DigitalRain_TestCase, 
     GameOfLife, 
     Plasma,
-    Plasma_TestCase,
     WorleyNoise,
     Lava,
     Metaballs,
-    Fire
+    Fire,
+    Lissajous,
+    Lissajous_TestCase
 )
 from utils import loadConfigFile
 
@@ -39,9 +40,9 @@ def drawNeopixels(screen,height,colors,config,args):
         for ci in range(start,end,step):            
             try:
                 pygame.draw.rect(screen,colors[ci],(ox,oy,psize,psize),0)
-            except IndexError:
+            except:
                 print(f' strip ( {ist},{np},{step} )')
-                print(f'idx {ci} ox={ox} oy={oy}')
+                print(f'idx {ci} ox={ox} oy={oy} color {colors[ci]}')
                 raise
             oy = oy + psize + dy
         ox = ox + psize + psx
@@ -78,7 +79,8 @@ def createAnimation(name_and_params,config):
                     'lava'  : Lava,
                     'worley': WorleyNoise,
                     'mballs': Metaballs,
-                    'fire'  : Fire
+                    'fire'  : Fire,
+                    'lissajous' : Lissajous
     }
     if params is None:
         print("please provide animation parametrers :", Animations[name].getParams())
