@@ -4,7 +4,7 @@
 #include <cstddef>
 #include <numeric>
 #include <tuple>
-
+#include <math_utils.hpp>
 namespace Neopixel
 {
 struct Subset
@@ -13,6 +13,13 @@ struct Subset
     uint8_t count; 
     int8_t dir;
 };
+struct InterpolatedPoint
+{
+    uint16_t idx[4];
+    uint8_t  value[4];
+    uint8_t n_points;
+};
+
 struct Strips
 {
     static Strips* loadFromBuffer(char*buffer,size_t size);
@@ -37,6 +44,26 @@ struct Strips
         }
         return max_cnt;
     }
+    static std::tuple<uint16_t,uint16_t,uint8_t> getPoint1D(uint16_t pos,uint16_t nmax,const Subset& s)
+    {
+        uint16_t idx = s.first;
+        if (s.dir < 0) idx += s.count - 1;
+
+        /*dy = (n-1) / (nmax-1)
+        py = y * dy
+        iy = dir*int(py)
+        #print(f'setPoint1D p={pos} y0={y0} n={n} dir={dir} dy={dy} py={py} iy={iy}')
+        return y0+iy,y0+iy+dir,py-int(py)*/
+        uint16_t py = pos*(s.count-1) / (nmax-1);  //py = py[8].pyf[8]
+        uint16_t pyf = py &0xff;
+        py >>= 8;
+        int16_t iy = s.dir * int16_t(py);
+        idx += iy;
+        return {idx,idx+s.dir,pyf};
+    }
+    //note x andy are 8.8bit fixed point
+    InterpolatedPoint getPoint2D(uint16_t x, uint16_t y, uint16_t nmax) const;
+
     std::tuple<uint16_t*,int> makeIndicesMatrix() const;
     uint16_t count;
     Subset element[];

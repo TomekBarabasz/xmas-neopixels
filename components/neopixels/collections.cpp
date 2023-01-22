@@ -66,6 +66,56 @@ std::tuple<uint16_t*,int> Strips::makeIndicesMatrix() const
 
     return {indices,row_size};
 }
+InterpolatedPoint Strips::getPoint2D(uint16_t x, uint16_t y, uint16_t nmax) const
+{
+    InterpolatedPoint ip;
+    auto [x1,xs] = splitFixpoint88(x);
+    auto [i00,i01,v0] = getPoint1D(y,nmax,element[x1]);
+    auto x2 = x1+1;
+    if (x2 >= count || 0==xs)
+    {
+        ip.idx[0] = i00;
+        ip.value[0] = 255-v0;
+        if (v0 > 0)
+        {
+            ip.idx[1] = i01;
+            ip.value[1] = v0;
+            ip.n_points = 2;
+        }
+        else
+        {
+            ip.n_points = 1;
+        }
+    }
+    else
+    {
+        auto [i10,i11,v1] = getPoint1D(y,nmax,element[x2]);
+
+        if (v0 == v1 && v0 == 0)
+        {
+            ip.idx[0] = i00;
+            ip.idx[1] = i10;
+            ip.value[0] = (255-xs);
+            ip.value[1] = xs;
+            ip.n_points = 2;
+        }
+        else
+        {
+            ip.idx[0] = i00;
+            ip.idx[1] = i01;
+            ip.idx[2] = i10;
+            ip.idx[3] = i11;
+            auto ys = (v0+v1)/2;
+
+            ip.value[0] = (255-xs)*(255-ys)/256;
+            ip.value[1] = 255-ys;
+            ip.value[2] = 255-xs;
+            ip.value[3] = xs*ys/256;
+            ip.n_points = 4;
+        }
+    }
+    return ip;
+}
 NeighboursMatrix* NeighboursMatrix::fromStrips(const Strips* strips)
 {
     const uint16_t longest = strips->getLongestLine();

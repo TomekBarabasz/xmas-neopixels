@@ -1,5 +1,6 @@
 #pragma once
 #include <cstdint>
+#include <math_utils.hpp>
 
 namespace Neopixel
 {
@@ -37,6 +38,12 @@ struct RGB
         return { r_,g_,b_ };
     }
 };
+inline RGB sat_add(const RGB& a, const RGB& b)
+{
+    return { (uint8_t)min( uint16_t(a.r) + uint16_t(b.r), 255 ),
+             (uint8_t)min( uint16_t(a.g) + uint16_t(b.g), 255 ),
+             (uint8_t)min( uint16_t(a.b) + uint16_t(b.b), 255 ) };
+}
 inline void fade_all(RGB *leds, int size, uint8_t scale)
 {
     for (int i=0;i<size;++i) {
@@ -58,6 +65,25 @@ struct HSV
 
     uint16_t h;
     uint8_t s,v;
-    RGB toRGB() const;
+    RGB toRGB() const
+    {
+        const uint16_t h_ = h % 360;
+        const uint16_t region = h_ / 60;
+        const uint16_t remainder = (h_ - (region * 60)) * (256/60);
+
+        const uint8_t p = (v * (255 - s)) >> 8;
+        const uint8_t q = (v * (255 - ((s * remainder) >> 8))) >> 8;
+        const uint8_t t = (v * (255 - ((s * (255 - remainder)) >> 8))) >> 8;
+
+        switch (region)
+        {
+            case 0: return {v,t,p};
+            case 1: return {q,v,p};
+            case 2: return {p,v,t};
+            case 3: return {p,q,v};
+            case 4: return {t,p,v};
+            default:return {v,p,q};
+        }
+    }
 };
 }

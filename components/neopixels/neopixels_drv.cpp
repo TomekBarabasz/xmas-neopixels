@@ -133,26 +133,6 @@ struct RMT : public Driver
 
 namespace Neopixel
 {
-RGB HSV::toRGB() const
-{
-    const uint16_t h_ = h % 360;
-    const uint16_t region = h_ / 60;
-    const uint16_t remainder = (h_ - (region * 60)) * (256/60);
-
-    const uint8_t p = (v * (255 - s)) >> 8;
-    const uint8_t q = (v * (255 - ((s * remainder) >> 8))) >> 8;
-    const uint8_t t = (v * (255 - ((s * (255 - remainder)) >> 8))) >> 8;
-
-    switch (region)
-    {
-        case 0: return {v,t,p};
-        case 1: return {q,v,p};
-        case 2: return {p,v,t};
-        case 3: return {p,q,v};
-        case 4: return {t,p,v};
-        default:return {v,p,q};
-    }
-}
 
 struct SegmentInfo
 {

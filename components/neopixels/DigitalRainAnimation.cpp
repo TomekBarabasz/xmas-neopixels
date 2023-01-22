@@ -4,7 +4,7 @@
 #include <collections.hpp>
 #include <utils.hpp>
 #include <random.hpp>
-#include <math_utils.h>
+#include <math_utils.hpp>
 #include <DigitalRainAnimation.hpp>
 #ifndef UNIT_TEST
  #include <esp_log.h>

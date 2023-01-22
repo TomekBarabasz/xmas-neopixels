@@ -1,4 +1,6 @@
+#pragma once
 #include <stdint.h>
+#include <tuple>
 
 template <typename T>
 T min(T a, T b) { return a < b ? a : b; }
@@ -41,3 +43,6 @@ int8_t  sin_8b(uint8_t theta);
 
 int16_t cos_16b(uint16_t theta);
 int8_t  cos_8b(uint8_t theta);
+
+inline int16_t makeFixpoint88(int8_t v, uint8_t f) { return (int16_t(v) << 8 ) | (int16_t)f;}
+inline std::tuple<int8_t,uint8_t> splitFixpoint88(int16_t f) { return {f>>8, f&0xff}; }
