@@ -1,4 +1,4 @@
-#include <math_utils.h>
+#include <math_utils.hpp>
 
 int16_t sin_16b(uint16_t theta)
 {

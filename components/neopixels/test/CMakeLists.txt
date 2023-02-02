@@ -19,8 +19,10 @@ target_link_libraries(libut_gtest
 add_library(animations SHARED 
     ../RandomWalkAnimation.cpp
     ../DigitalRainAnimation.cpp
-    ../LissajousAnimation.cpp
+    ../ParticlesAnimation.cpp
     ../collections.cpp
+    ../math_utils.cpp
+    ../value_animation.cpp
 )
 target_compile_options(animations PUBLIC
     -O0 -g
@@ -38,7 +40,7 @@ add_executable(neopixels_ut
     testRandomWalk.cpp
     testCollections.cpp
     testDigitalRain.cpp
-    testLissajous.cpp
+    testParticles.cpp
 )
 target_compile_options(neopixels_ut PUBLIC
     -O0 -g
