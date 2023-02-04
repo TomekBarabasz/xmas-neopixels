@@ -5,7 +5,7 @@
 #include <esp_log.h>
 #include <neopixel.h>
 #include <neopixel_drv.h>
-#include <math_utils.h>
+#include <math_utils.hpp>
 
 using namespace Neopixel;
 using namespace NeopixelDrv;

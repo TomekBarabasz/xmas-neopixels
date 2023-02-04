@@ -2,7 +2,7 @@
 #include <cstdint>
 #include <led_strip.hpp>
 #include <utils.hpp>
-#include <math_utils.h>
+#include <math_utils.hpp>
 #include <color.hpp>
 #include <random.hpp>
 #include <RandomWalkAnimation.hpp>
@@ -675,7 +675,7 @@ Animation* Animation::create(LedStrip*strip,int animation_id, void* data, const 
         //case 11: return new HorizontalWave(strip, animation_data_size, data);
         case 12: return new RandomWalkAnimation(strip, animation_data_size, data, strips, random);
         case 13: return new DigitalRainAnimation(strip, animation_data_size, data, strips, random);
-        case 14: return new ParticlesAnimation(strip, animation_data_size, data, strips, random);
+        case 14: return new ParticleAnimation(strip, animation_data_size, data, strips, random);
     }
 }
 }

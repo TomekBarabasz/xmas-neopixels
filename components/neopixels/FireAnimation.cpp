@@ -3,7 +3,7 @@
 #include <led_strip.hpp>
 #include <collections.hpp>
 #include <utils.hpp>
-#include <math_utils.h>
+#include <math_utils.hpp>
 #include <random.hpp>
 #include <cstring>
 #ifndef UNIT_TEST
