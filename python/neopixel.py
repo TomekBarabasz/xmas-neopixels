@@ -1,6 +1,7 @@
 import socket,argparse,re,struct
 from time import sleep
 from pathlib import Path
+from utils import set_keepalive
 #rxSet = re.compile( r'\s*(\d+)-(\d+) (\d+)\:(\d+)\:(\d+)\s*(\w)?\s*' )
 rxSet = re.compile( r'\s*(\d+)-(\d+) ([\dabcdefx]+)\:([\dabcdefx]+)\:([\dabcdefx]+)\s*(\w)?\s*' )
 
@@ -51,15 +52,6 @@ def parse_configure_command(cmd):
 
 def parse_save_command(cmd):
     return None
-
-def set_keepalive(sock):
-    sock.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
-    # Linux specific: after 10 idle minutes, start sending keepalives every 5 minutes. 
-    # Drop connection after 10 failed keepalives
-    if hasattr(socket, "TCP_KEEPIDLE") and hasattr(socket, "TCP_KEEPINTVL") and hasattr(socket, "TCP_KEEPCNT"):
-        sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPIDLE,  60)
-        sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPINTVL, 60)
-        sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPCNT,   2)    
 
 def pingpong(sock, cmd):
     def makeSetCommand(setprm,refresh):
@@ -133,7 +125,7 @@ def main(Args):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Neopixel high level contoller")
-    parser.add_argument("-addr","-a", type = str, default="172.19.47.252:1234", help="low level controller address:port")
+    parser.add_argument("-addr","-a", type = str, default="192.168.1.10:1234", help="low level controller address:port")
     parser.add_argument("-preset","-p",type=Path,help="animation presets file")
     parser.add_argument("-test", action='store_true',help="testing mode, not using sockets")
     Args = parser.parse_args()

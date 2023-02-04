@@ -1,12 +1,22 @@
 import json
 from types import SimpleNamespace
 from random import randrange
+import socket
 
 def loadConfigFile(filename):
     with open(filename, "r") as your_file:
         your_dict = json.load(your_file)
         your_file.seek(0)
         return json.load(your_file, object_hook= lambda x: SimpleNamespace(**x))
+
+def set_keepalive(sock):
+    sock.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
+    # Linux specific: after 10 idle minutes, start sending keepalives every 5 minutes. 
+    # Drop connection after 10 failed keepalives
+    if hasattr(socket, "TCP_KEEPIDLE") and hasattr(socket, "TCP_KEEPINTVL") and hasattr(socket, "TCP_KEEPCNT"):
+        sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPIDLE,  60)
+        sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPINTVL, 60)
+        sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPCNT,   2)    
 
 def clamp(v,vmin,vmax):
     return min( max(v,vmin), vmax)

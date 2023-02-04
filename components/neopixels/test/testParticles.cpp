@@ -10,6 +10,7 @@
 #include <string>
 #include <map>
 #include <cmath>
+#include <fstream>
 
 using namespace Neopixel;
 using namespace ::testing;
@@ -629,4 +630,45 @@ TEST(Particles, Polar_update)
     }
 
     delete a;
+}
+
+TEST(Particles, load_from_file)
+{
+    std::ifstream msg("encoded.msg",std::ios::binary);
+    char buffer[128];
+    msg.seekg (0, msg.end);
+    int datasize = msg.tellg();
+    msg.seekg (0, msg.beg);
+    msg.read(buffer,128);
+    
+    MockLedStrip led_strip;
+    MockRandomGenerator random;
+    Subset su[] = {{0,10,1},{15,10,-1},{30,10,1}};
+    Strips *pstrips = makeStrips(su);
+
+    msg.read(buffer,128);
+    void *pbuff = buffer + 5;
+    EXPECT_CALL(led_strip, getLength()).Times(1).WillOnce(Return(pstrips->count));
+    auto *pa = new ParticleAnimation(&led_strip, datasize, pbuff, pstrips, &random);
+
+    delete pstrips;
+    delete pa;
+}
+
+TEST(Particles, load_from_buffer)
+{
+    unsigned char buffer[] = {1,14,0,63,0,20,0,40,0,200,0,2,0,4,0,1,4,44,1,4,7,0,4,7,0,0,0,0,255,127,0,1,0,0,0,255,127,0,255,0,0,0,104,1,1,0,1,0,0,0,255,255,0,1,1,0,0,255,255,0,1,0,0,0,104,1,1,0};
+    int datasize = sizeof(buffer);
+
+    MockLedStrip led_strip;
+    MockRandomGenerator random;
+    Subset su[] = {{0,10,1},{15,10,-1},{30,10,1}};
+    Strips *pstrips = makeStrips(su);
+
+    void *pbuff = buffer + 5;
+    EXPECT_CALL(led_strip, getLength()).Times(1).WillOnce(Return(pstrips->count));
+    auto *pa = new ParticleAnimation(&led_strip, datasize, pbuff, pstrips, &random);
+
+    delete pstrips;
+    delete pa;
 }
