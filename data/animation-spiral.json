@@ -1,0 +1,38 @@
+{
+    "type" : "ParticleAnimation",
+    "delay_ms" : 20,
+    "fade_delay_ms" : 40,
+    "fading_factor" : 250,
+    "hue_shift" : 2,
+    "particles" :
+    [
+        {
+            "type" : "PolarParticle",
+            "draw_mode" : 1,
+            "yscale"    : 450,
+            "center_x"  : 2048,
+            "center_y"  : 3300,
+            "angle" :
+            {
+                "type" : "ValueAnimation_wrapped_u16",
+                "min"  : 0,
+                "max"  : 65535,
+                "inc"  : 768
+            },
+            "radius" :
+            {
+                "type" : "ValueAnimation_pingpong_u16",
+                "min"  : 256,
+                "max"  : 2000,
+                "inc"  : 5
+            },
+            "hue" :
+            {
+                "type" : "ValueAnimation_wrapped_u16",
+                "min"  : 0,
+                "max"  : 1440,
+                "inc"  : 1
+            }
+        }
+    ]
+}

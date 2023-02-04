@@ -1,0 +1,104 @@
+{
+    "type" : "ParticleAnimation",
+    "delay_ms" : 20,
+    "fade_delay_ms" : 40,
+    "fading_factor" : 240,
+    "hue_shift" : 2,
+    "particles" :
+    [
+        {
+            "type" : "LissajousParticle",
+            "draw_mode" : 1,
+            "center_x"  : 2048,
+            "center_y"  : 3300,
+            "omega_x" :
+            {
+                "type" : "ValueAnimation_const_u16",
+                "value" : 500
+            },
+            "omega_y" : 
+            {
+                "type" : "ValueAnimation_const_u16",
+                "value" : 550
+            },
+            "-ampl_x" :
+            {
+                "type" : "ValueAnimation_const_u16",
+                "value" : 2000
+            },
+            "ampl_x" :
+            {
+                "type" : "ValueAnimation_pingpong_u16",
+                "min"  : 256,
+                "max"  : 2000,
+                "inc"  : 128
+            },
+            "-ampl_y" :
+            {
+                "type" : "ValueAnimation_const_u16",
+                "value" : 3250
+            },
+            "ampl_y" :
+            {
+                "type" : "ValueAnimation_pingpong_u16",
+                "min"  : 256,
+                "max"  : 3250,
+                "inc"  : 128
+            },
+            "phase_x" :
+            {
+                "type" : "ValueAnimation_wrapped_i16",
+                "min"  : 0,
+                "max"  : 32767,
+                "inc"  : 0
+            },
+            "phase_y" :
+            {
+                "type" : "ValueAnimation_wrapped_i16",
+                "min"  : -32767,
+                "max"  : 32767,
+                "inc"  : 1
+            },
+            "hue" :
+            {
+                "type" : "ValueAnimation_pingpong_u16",
+                "min"  : 720,
+                "max"  : 1440,
+                "inc"  : 1
+            }
+        },
+        {
+            "type" : "PolarParticle",
+            "draw_mode" : 1,
+            "yscale"    : 450,
+            "center_x"  : 2048,
+            "center_y"  : 3300,
+            "angle" :
+            {
+                "type" : "ValueAnimation_wrapped_u16",
+                "min"  : 0,
+                "max"  : 65535,
+                "inc"  : 768
+            },
+            "radius" :
+            {
+                "type" : "ValueAnimation_pingpong_u16",
+                "min"  : 256,
+                "max"  : 2000,
+                "inc"  : 5
+            },
+            "hue" :
+            {
+                "type" : "ValueAnimation_pingpong_u16",
+                "min"  : 0,
+                "max"  : 720,
+                "inc"  : 1
+            },
+            "-hue" :
+            {
+                "type" : "ValueAnimation_const_u16",
+                "value" : 0
+            }
+        }
+    ]
+}

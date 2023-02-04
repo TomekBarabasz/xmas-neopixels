@@ -55,7 +55,8 @@ ParticleAnimation::ParticleAnimation(LedStrip *strip, int datasize, void *data, 
     delay_ms = decode<uint16_t>(data);
     fade_delay_ms = decode<uint16_t>(data);
     fading_factor = decode<uint8_t>(data);
-    particle_draw_mode = decode<uint8_t>(data);
+
+    hue_shift = decode<uint8_t>(data);
     n_particles = decode<uint8_t>(data);    
     particles = new Particle*[n_particles];
     datasize -= 7;
@@ -74,9 +75,6 @@ ParticleAnimation::ParticleAnimation(LedStrip *strip, int datasize, void *data, 
             break;
         }
     }
-
-    center_x = lines->count * 256/2;
-    center_y = nmax * 256/2;
     
     ESP_LOGI("LissajousAnimation", "LissajousAnimation : delay %d fade_delay %d", delay_ms, fade_delay_ms);
 }
@@ -91,6 +89,9 @@ LissajousParticle* LissajousParticle::load(void*& data)
 {
     auto ptr = new LissajousParticle;
     auto & p = *ptr;
+    p.draw_mode = decode<uint8_t>(data);
+    p.center_x  = decode<uint16_t>(data);
+    p.center_y  = decode<uint16_t>(data);
     p.omega_x = loadValueAnimation<uint16_t>(data);
     p.omega_y = loadValueAnimation<uint16_t>(data);
     p.ampl_x  = loadValueAnimation<uint16_t>(data);
@@ -98,7 +99,6 @@ LissajousParticle* LissajousParticle::load(void*& data)
     p.phase_x = loadValueAnimation<int16_t>(data);
     p.phase_y = loadValueAnimation<int16_t>(data);
     p.hue     = loadValueAnimation<uint16_t>(data);
-
     p.time = 0;
 
     return ptr;
@@ -117,8 +117,8 @@ std::tuple<int16_t,int16_t,uint16_t>  LissajousParticle::update(uint16_t dt,Rand
 
     time += dt;
 
-    int16_t x = static_cast<int16_t>((ax * sin_16b( (omx * time + phx) )) >> 15);
-    int16_t y = static_cast<int16_t>((ay * cos_16b( (omy * time + phy) )) >> 15);  
+    int16_t x = static_cast<int16_t>((ax * sin_16b( (omx * time + phx) )) >> 15) + center_x;
+    int16_t y = static_cast<int16_t>((ay * cos_16b( (omy * time + phy) )) >> 15) + center_y;
 
     return {x,y,hue->nextValue(rnd)};
 }
@@ -136,11 +136,14 @@ PolarParticle* PolarParticle::load(void*& data)
 {
     auto ptr = new PolarParticle;
     auto & p = *ptr;
-
+    p.draw_mode= decode<uint8_t>(data);
+    p.center_x = decode<uint16_t>(data);
+    p.center_y = decode<uint16_t>(data);
+    p.yscale   = decode<uint16_t>(data);
     p.angle  = loadValueAnimation<uint16_t>(data);
     p.radius = loadValueAnimation<uint16_t>(data);
     p.hue    = loadValueAnimation<uint16_t>(data);
-
+    
     return ptr;
 }
 std::tuple<int16_t,int16_t,uint16_t>  PolarParticle::update(uint16_t ms,RandomGenerator* rnd)
@@ -148,8 +151,9 @@ std::tuple<int16_t,int16_t,uint16_t>  PolarParticle::update(uint16_t ms,RandomGe
     auto a = angle->nextValue(rnd);
     int32_t r = radius->nextValue(rnd);
 
-    int16_t x = static_cast<int16_t>((r * cos_16b(a)) >> 15);
-    int16_t y = static_cast<int16_t>((r * sin_16b(a)) >> 15);
+    int16_t x = static_cast<int16_t>((r * cos_16b(a)) >> 15) + center_x;
+    int32_t y1 = (r * sin_16b(a)) >> 15;
+    int16_t y = static_cast<int16_t>( (y1 * yscale) >> 8) + center_y;
 
     return {x,y,hue->nextValue(rnd)};
 }
@@ -175,11 +179,36 @@ void ParticleAnimation::step()
     for (int i=0;i<n_particles;++i)
     {
         auto [x,y,hue] = particles[i]->update(1,rand);
-        x += center_x;
-        y += center_y;
         if (x < 0 || y < 0 || x > xmax || y > ymax) continue;
-        InterpolatedPoint ip = lines->getPoint2D(x,y,nmax);
+
+        InterpolatedPoint ip;
+
+        switch (particles[i]->draw_mode) 
+        {
+            case 0:
+                ip = lines->getPoint2D(x,y,nmax);
+                break;
+            case 1:
+            case 2:
+            {
+                auto [xi,xs] = splitFixpoint88(x);
+                auto [i00,i01,v0] = Strips::getPoint1D(y,nmax,lines->element[xi]);
+                ip.idx[0] = i00;
+                ip.value[0] = 255-v0;
+                ip.n_points = 1;
+                if (1==particles[i]->draw_mode) break;
+                if (v0 > 0)
+                {
+                    ip.idx[1] = i01;
+                    ip.value[1] = v0;
+                    ++ip.n_points;
+                }
+                break;
+            }
+        }
+        hue = hue >> hue_shift;
         HSV hsv {hue,255,0};
+
         for (int j=0;j<ip.n_points;++j)
         {
             hsv.v = ip.value[j];

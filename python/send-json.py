@@ -48,20 +48,20 @@ def parseValueAnimation(type,desc):
 
 def parseParticleAnimation(descr):
     def parseLissajousParticle(descr):
-        data = struct.pack("<B",LissajousParticleType)
+        data = struct.pack("<BBHH",LissajousParticleType,descr['draw_mode'],descr['center_x'],descr['center_y'])
         for attr in ['omega_x','omega_y','ampl_x','ampl_y','phase_x','phase_y','hue']:
             vanim = descr[attr]
             data += parseValueAnimation(vanim['type'],vanim)
         return data
     
     def parsePolarParticle(descr):
-        data = struct.pack("<B",PolarParticleType)
+        data = struct.pack("<BBHHH",PolarParticleType,descr['draw_mode'],descr['center_x'],descr['center_y'],descr['yscale'])
         for attr in ['angle','radius','hue']:
             vanim = descr[attr]
             data += parseValueAnimation(vanim['type'],vanim)
         return data
     
-    data = struct.pack("<HHBB", *[descr[attr] for attr in ['delay_ms', 'fade_delay_ms','fading_factor','particle_draw_mode']])
+    data = struct.pack("<HHBB", *[descr[attr] for attr in ['delay_ms', 'fade_delay_ms','fading_factor','hue_shift']])
     data += struct.pack("<B", len(descr['particles']))
     for particle in descr['particles']:
         if particle['type'] == "LissajousParticle":

@@ -21,6 +21,7 @@ struct Particle
     virtual ~Particle(){}
     virtual std::tuple<int16_t,int16_t,uint16_t> update(uint16_t ms,RandomGenerator*) = 0;
     uint16_t center_x,center_y;
+    uint8_t draw_mode;
 };
 struct LissajousParticle : Particle
 {
@@ -40,6 +41,7 @@ struct PolarParticle : Particle
     U16ValueAnimation *angle;
     U16ValueAnimation *radius;
     U16ValueAnimation *hue;
+    uint16_t           yscale;
 
     static PolarParticle* load(void*&);    
     static size_t getBufferSize() { return 0; }
@@ -62,11 +64,10 @@ protected:
     uint16_t delay_ms,fade_delay_ms;
     uint16_t ms_to_fade;
     uint8_t fading_factor;
-    uint8_t particle_draw_mode;
+    uint8_t hue_shift;
     uint8_t n_particles;
     Particle** particles;
 
     uint16_t totalPixels,nmax;
-    uint16_t center_x,center_y;
 };
 }
