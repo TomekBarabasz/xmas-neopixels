@@ -1,0 +1,137 @@
+﻿<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             x:Class="Xmas_Led_Ctrl.MainPage"
+             Title="TCP Control Panel">
+
+    <Grid Padding="10" RowSpacing="10" ColumnSpacing="10">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="*" />
+            <ColumnDefinition Width="*" />
+        </Grid.ColumnDefinitions>
+
+        <!-- Connection Panel -->
+        <Grid Grid.Row="0" Grid.ColumnSpan="2" ColumnSpacing="10">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+
+            <Entry x:Name="IpAddressEntry"
+                   Grid.Column="0"
+                   Placeholder="IP:Port (e.g., 192.168.1.10:1234)"
+                   Text="192.168.1.10:1234"
+                   VerticalOptions="Center"
+                   FontSize="16" />
+
+            <Button x:Name="ConnectButton"
+                    Grid.Column="1"
+                    Text="Connect"
+                    Clicked="OnConnectClicked"
+                    WidthRequest="100"
+                    VerticalOptions="Center" />
+
+            <CheckBox x:Name="ConnectionStatusCheckBox"
+                      Grid.Column="2"
+                      IsEnabled="False"
+                      Color="Green"
+                      VerticalOptions="Center" />
+        </Grid>
+
+        <!-- Control Buttons Grid (2 columns x 4 rows) -->
+        
+        <!-- Row 1 -->
+        <Button x:Name="Button1"
+                Grid.Row="1" Grid.Column="0"
+                Text="random&#10;slow"
+                BackgroundColor="#FF6B6B"
+                TextColor="White"
+                LineBreakMode="WordWrap"
+                FontSize="20"
+                FontAttributes="Bold"
+                Clicked="OnButton1Clicked" />
+
+        <Button x:Name="Button2"
+                Grid.Row="1" Grid.Column="1"
+                Text="random&#10;fast"
+                BackgroundColor="#4ECDC4"
+                TextColor="White"
+                LineBreakMode="WordWrap"
+                FontSize="20"
+                FontAttributes="Bold"
+                Clicked="OnButton2Clicked" />
+
+        <!-- Row 2 -->
+        <Button x:Name="Button3"
+                Grid.Row="2" Grid.Column="0"
+                Text="random&#10;walk&#10;fast"
+                BackgroundColor="#45B7D1"
+                TextColor="White"
+                LineBreakMode="WordWrap"
+                FontSize="20"
+                FontAttributes="Bold"
+                Clicked="OnButton3Clicked" />
+
+        <Button x:Name="Button4"
+                Grid.Row="2" Grid.Column="1"
+                Text="random&#10;walk&#10;slow"
+                BackgroundColor="#96CEB4"
+                TextColor="White"
+                LineBreakMode="WordWrap"
+                FontSize="20"
+                FontAttributes="Bold"
+                Clicked="OnButton4Clicked" />
+
+        <!-- Row 3 -->
+        <Button x:Name="Button5"
+                Grid.Row="3" Grid.Column="0"
+                Text="random&#10;wark&#10;blue&#10;slow"
+                BackgroundColor="#FFEAA7"
+                TextColor="#2D3436"
+                LineBreakMode="WordWrap"
+                FontSize="20"
+                FontAttributes="Bold"
+                Clicked="OnButton5Clicked" />
+
+        <Button x:Name="Button6"
+                Grid.Row="3" Grid.Column="1"
+                Text="digital&#10;rain"
+                BackgroundColor="#DFE6E9"
+                TextColor="#2D3436"
+                LineBreakMode="WordWrap"
+                FontSize="20"
+                FontAttributes="Bold"
+                Clicked="OnButton6Clicked" />
+
+        <!-- Row 4 -->
+        <Button x:Name="Button7"
+                Grid.Row="4" Grid.Column="0"
+                Text="digital&#10;rain&#10;random"
+                BackgroundColor="#A29BFE"
+                TextColor="White"
+                LineBreakMode="WordWrap"
+                FontSize="20"
+                FontAttributes="Bold"
+                Clicked="OnButton7Clicked" />
+
+        <Button x:Name="Button8"
+                Grid.Row="4" Grid.Column="1"
+                Text="digital&#10;rain&#10;blue"
+                BackgroundColor="#FD79A8"
+                TextColor="White"
+                LineBreakMode="WordWrap"
+                FontSize="20"
+                FontAttributes="Bold"
+                Clicked="OnButton8Clicked" />
+
+    </Grid>
+
+</ContentPage>

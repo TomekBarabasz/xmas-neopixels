@@ -1,0 +1,102 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="456" height="456" viewBox="0 0 456 456" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background -->
+  <rect width="456" height="456" fill="#1a472a" rx="80"/>
+  
+  <!-- Tree layers (from top to bottom) -->
+  <!-- Top triangle -->
+  <path d="M 228 60 L 140 160 L 316 160 Z" fill="#2d5a3d"/>
+  
+  <!-- Middle-top triangle -->
+  <path d="M 228 130 L 120 250 L 336 250 Z" fill="#357a47"/>
+  
+  <!-- Middle-bottom triangle -->
+  <path d="M 228 210 L 100 340 L 356 340 Z" fill="#3d8f52"/>
+  
+  <!-- Bottom triangle -->
+  <path d="M 228 290 L 80 420 L 376 420 Z" fill="#45a35c"/>
+  
+  <!-- Tree trunk -->
+  <rect x="198" y="420" width="60" height="40" fill="#5d4037" rx="4"/>
+  
+  <!-- Star on top -->
+  <path d="M 228 30 L 235 52 L 258 52 L 240 66 L 247 88 L 228 74 L 209 88 L 216 66 L 198 52 L 221 52 Z" 
+        fill="#ffd700" stroke="#ffed4e" stroke-width="2"/>
+  
+  <!-- Colored lights - Red -->
+  <circle cx="170" cy="145" r="8" fill="#ff0000" opacity="0.9">
+    <animate attributeName="opacity" values="0.5;1;0.5" dur="1.5s" repeatCount="indefinite"/>
+  </circle>
+  <circle cx="250" cy="220" r="8" fill="#ff0000" opacity="0.9">
+    <animate attributeName="opacity" values="1;0.5;1" dur="1.3s" repeatCount="indefinite"/>
+  </circle>
+  <circle cx="140" cy="310" r="8" fill="#ff0000" opacity="0.9">
+    <animate attributeName="opacity" values="0.5;1;0.5" dur="1.7s" repeatCount="indefinite"/>
+  </circle>
+  
+  <!-- Colored lights - Blue -->
+  <circle cx="286" cy="145" r="8" fill="#0066ff" opacity="0.9">
+    <animate attributeName="opacity" values="1;0.5;1" dur="1.4s" repeatCount="indefinite"/>
+  </circle>
+  <circle cx="180" cy="235" r="8" fill="#0066ff" opacity="0.9">
+    <animate attributeName="opacity" values="0.5;1;0.5" dur="1.6s" repeatCount="indefinite"/>
+  </circle>
+  <circle cx="300" cy="325" r="8" fill="#0066ff" opacity="0.9">
+    <animate attributeName="opacity" values="1;0.5;1" dur="1.2s" repeatCount="indefinite"/>
+  </circle>
+  
+  <!-- Colored lights - Yellow -->
+  <circle cx="228" cy="170" r="8" fill="#ffff00" opacity="0.9">
+    <animate attributeName="opacity" values="0.5;1;0.5" dur="1.8s" repeatCount="indefinite"/>
+  </circle>
+  <circle cx="210" cy="280" r="8" fill="#ffff00" opacity="0.9">
+    <animate attributeName="opacity" values="1;0.5;1" dur="1.5s" repeatCount="indefinite"/>
+  </circle>
+  <circle cx="180" cy="380" r="8" fill="#ffff00" opacity="0.9">
+    <animate attributeName="opacity" values="0.5;1;0.5" dur="1.3s" repeatCount="indefinite"/>
+  </circle>
+  
+  <!-- Colored lights - Green -->
+  <circle cx="155" cy="185" r="8" fill="#00ff00" opacity="0.9">
+    <animate attributeName="opacity" values="1;0.5;1" dur="1.6s" repeatCount="indefinite"/>
+  </circle>
+  <circle cx="280" cy="270" r="8" fill="#00ff00" opacity="0.9">
+    <animate attributeName="opacity" values="0.5;1;0.5" dur="1.4s" repeatCount="indefinite"/>
+  </circle>
+  <circle cx="240" cy="365" r="8" fill="#00ff00" opacity="0.9">
+    <animate attributeName="opacity" values="1;0.5;1" dur="1.7s" repeatCount="indefinite"/>
+  </circle>
+  
+  <!-- Colored lights - Purple/Magenta -->
+  <circle cx="300" cy="180" r="8" fill="#ff00ff" opacity="0.9">
+    <animate attributeName="opacity" values="0.5;1;0.5" dur="1.2s" repeatCount="indefinite"/>
+  </circle>
+  <circle cx="160" cy="260" r="8" fill="#ff00ff" opacity="0.9">
+    <animate attributeName="opacity" values="1;0.5;1" dur="1.8s" repeatCount="indefinite"/>
+  </circle>
+  <circle cx="320" cy="370" r="8" fill="#ff00ff" opacity="0.9">
+    <animate attributeName="opacity" values="0.5;1;0.5" dur="1.5s" repeatCount="indefinite"/>
+  </circle>
+  
+  <!-- Colored lights - Orange -->
+  <circle cx="195" cy="200" r="8" fill="#ff8800" opacity="0.9">
+    <animate attributeName="opacity" values="1;0.5;1" dur="1.3s" repeatCount="indefinite"/>
+  </circle>
+  <circle cx="245" cy="295" r="8" fill="#ff8800" opacity="0.9">
+    <animate attributeName="opacity" values="0.5;1;0.5" dur="1.7s" repeatCount="indefinite"/>
+  </circle>
+  <circle cx="130" cy="395" r="8" fill="#ff8800" opacity="0.9">
+    <animate attributeName="opacity" values="1;0.5;1" dur="1.4s" repeatCount="indefinite"/>
+  </circle>
+  
+  <!-- Light glow effects -->
+  <circle cx="170" cy="145" r="12" fill="#ff0000" opacity="0.3">
+    <animate attributeName="opacity" values="0.1;0.3;0.1" dur="1.5s" repeatCount="indefinite"/>
+  </circle>
+  <circle cx="286" cy="145" r="12" fill="#0066ff" opacity="0.3">
+    <animate attributeName="opacity" values="0.1;0.3;0.1" dur="1.4s" repeatCount="indefinite"/>
+  </circle>
+  <circle cx="228" cy="170" r="12" fill="#ffff00" opacity="0.3">
+    <animate attributeName="opacity" values="0.1;0.3;0.1" dur="1.8s" repeatCount="indefinite"/>
+  </circle>
+</svg>

@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="456" height="456" viewBox="0 0 456 456" xmlns="http://www.w3.org/2000/svg">
+  <!-- Simplified Christmas tree for splash screen -->
+  
+  <!-- Tree layers -->
+  <path d="M 228 100 L 140 200 L 316 200 Z" fill="#2d5a3d"/>
+  <path d="M 228 170 L 120 290 L 336 290 Z" fill="#357a47"/>
+  <path d="M 228 250 L 100 380 L 356 380 Z" fill="#3d8f52"/>
+  
+  <!-- Tree trunk -->
+  <rect x="198" y="380" width="60" height="40" fill="#5d4037" rx="4"/>
+  
+  <!-- Star on top -->
+  <path d="M 228 70 L 235 92 L 258 92 L 240 106 L 247 128 L 228 114 L 209 128 L 216 106 L 198 92 L 221 92 Z" 
+        fill="#ffd700" stroke="#ffed4e" stroke-width="3"/>
+  
+  <!-- Large colored lights -->
+  <circle cx="170" cy="185" r="10" fill="#ff0000"/>
+  <circle cx="286" cy="185" r="10" fill="#0066ff"/>
+  <circle cx="228" cy="210" r="10" fill="#ffff00"/>
+  <circle cx="155" cy="255" r="10" fill="#00ff00"/>
+  <circle cx="300" cy="255" r="10" fill="#ff00ff"/>
+  <circle cx="180" cy="320" r="10" fill="#ff8800"/>
+  <circle cx="275" cy="320" r="10" fill="#ff0000"/>
+  <circle cx="140" cy="355" r="10" fill="#0066ff"/>
+  <circle cx="228" cy="340" r="10" fill="#00ff00"/>
+  <circle cx="315" cy="355" r="10" fill="#ffff00"/>
+</svg>
